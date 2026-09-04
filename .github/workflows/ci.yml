@@ -43,14 +43,20 @@ jobs:
         shell: bash
         working-directory: ${{ matrix.package }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           # Node 22 is required, not just preferred: on Windows npm runs scripts
           # through cmd.exe, which does not expand globs, so the test patterns
           # reach Node unexpanded and rely on its built-in glob support (Node 21+).
           node-version: '22'
+          # Dependency caching stays off. setup-node v5+ turns npm caching on
+          # automatically when the repo-root package.json declares a
+          # "packageManager" field, then fails the job if no lockfile is found to
+          # key on. This repo has no root package.json, so that never fires - but
+          # adding one with "packageManager" would break every leg of this matrix,
+          # because the lockfiles live in the per-package directories.
 
       - name: Install dependencies
         # forge-build-agent-team declares no dependencies and ships no lockfile,
@@ -84,9 +90,9 @@ jobs:
       run:
         working-directory: scripts/forge-launcher
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: '22'
 

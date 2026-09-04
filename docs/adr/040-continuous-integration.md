@@ -176,6 +176,27 @@ Alternatives rejected:
   real fix for the coupling and remains open. It is a refactor spanning two
   packages, out of scope for making CI green.
 
+### Action versions
+
+`actions/checkout` and `actions/setup-node` are pinned at v7. The v4 releases
+run on Node 20, which the runner marks deprecated on every job.
+
+Three majors of breaking changes were reviewed before moving. None apply here,
+but two are worth recording because they would apply after a plausible future
+change:
+
+- `checkout@v7` refuses to check out fork code under `pull_request_target` and
+  `workflow_run`. This workflow triggers on plain `pull_request`, which is
+  unaffected. Switching triggers to get a writable token would hit this.
+- `setup-node@v5` enables dependency caching automatically when `package.json`
+  declares a `packageManager` field, and v6 narrows that to npm. No manifest in
+  this repository declares `packageManager`, and there is no root
+  `package.json`, so nothing is auto-detected. Adding one would enable caching,
+  send the action looking for a lockfile at the repository root, and fail every
+  leg - the lockfiles live in the six package directories. This is recorded as a
+  comment beside the step rather than only here, because the failure would
+  appear far from its cause.
+
 The workflow requests `permissions: contents: read` and uses no secrets, so it
 runs correctly under the read-only token given to fork pull requests.
 
