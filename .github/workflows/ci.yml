@@ -28,6 +28,14 @@ jobs:
           - templates/skills/forge-workflow-engine
           - templates/skills/forge-workforce-compiler
           - templates/skills/skill-review
+        include:
+          # forge-workflow-engine is the only package that is not self-contained:
+          # its tsconfig compiles the adapter's sources, and engine.ts dynamically
+          # imports the adapter's discovery.ts, which imports gray-matter. Bare
+          # specifiers resolve from the importing file's directory, so the engine's
+          # own node_modules cannot satisfy it - the adapter must be installed too.
+          - package: templates/skills/forge-workflow-engine
+            sibling: templates/skills/forge-execution-adapter
     defaults:
       run:
         # bash on both runners keeps the conditional install step and glob
@@ -53,6 +61,13 @@ jobs:
           else
             npm install --no-audit --no-fund
           fi
+
+      - name: Install sibling dependencies
+        # Only set for forge-workflow-engine; see the matrix include above.
+        # The adapter ships a lockfile, so npm ci is safe here.
+        if: matrix.sibling
+        working-directory: ${{ matrix.sibling }}
+        run: npm ci
 
       - name: Typecheck
         # forge-build-agent-team is plain .mjs and has no typecheck script.

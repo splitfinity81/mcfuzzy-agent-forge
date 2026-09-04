@@ -138,6 +138,44 @@ A second job runs `npm run check:version`, which enforces the AGENTS.md rule tha
 the README's `**Latest:**` line tracks the top section of `docs/updates.md`. It
 is a convention the repository already relies on and had no enforcement for.
 
+**8. Install the adapter's dependencies on the engine's matrix leg.**
+
+The first CI run went red on both `forge-workflow-engine` legs with
+`error TS2307: Cannot find module 'gray-matter'`, reported against the
+*adapter's* `discovery.ts`. The engine is the only package in the repository
+that is not self-contained: `engine.ts` dynamically imports
+`../../forge-execution-adapter/scripts/discovery.ts`, TypeScript resolves
+literal-specifier dynamic imports and pulls the target into the program, and
+`discovery.ts` imports `gray-matter`.
+
+Because CI installs dependencies per package, the adapter's `node_modules` is
+absent on the engine's leg. The bare specifier then cannot resolve: both Node
+and TypeScript resolve it from `discovery.ts`'s own directory upward, and the
+engine's `node_modules` is not on that path. This is the compile-time twin of
+the runtime failure fixed in v3.46.
+
+The workflow adds a `matrix.include` entry giving the engine a `sibling`
+property, plus a step conditional on that property which runs `npm ci` in the
+adapter before the typecheck. An `include` entry whose keys match an existing
+combination merges into it rather than creating new combinations, so the matrix
+stays at twelve legs and the property lands on both engine legs.
+
+Alternatives rejected:
+
+- **Narrowing the engine's `tsconfig.json` `include`.** Tested directly, by
+  hiding the adapter's `node_modules` and running the typecheck with and
+  without the adapter's sources in `include`. It fails identically either way.
+  The coupling lives in the import graph, not the glob, so the `include` entry
+  is left where it documents the intent.
+- **Adding `gray-matter` to the engine's dependencies.** Resolution starts at
+  the importing file, so the engine's `node_modules` is never consulted.
+- **An ambient `declare module "gray-matter"` stub in the engine.** It would
+  type the import as `any` while compiling the adapter's source, weakening a
+  typecheck that passes honestly on the adapter's own leg.
+- **Extracting the shared types into a dependency-free package.** This is the
+  real fix for the coupling and remains open. It is a refactor spanning two
+  packages, out of scope for making CI green.
+
 The workflow requests `permissions: contents: read` and uses no secrets, so it
 runs correctly under the read-only token given to fork pull requests.
 
@@ -152,6 +190,11 @@ runs correctly under the read-only token given to fork pull requests.
   25 minutes.
 - Test discovery in the engine is now capped at two directory levels. This is
   recorded as a known limitation rather than a hidden one.
+- The engine's dynamic import of the adapter resolves in CI exactly as it does
+  locally, so CI exercises the real code path rather than the degraded fallback.
+- The engine and the adapter are now coupled at build time as well as at
+  runtime, and the workflow encodes that coupling explicitly. Severing it
+  requires the shared types to move into their own package.
 - CI covers typecheck, tests, and version consistency. It does not lint: no
   linter is configured anywhere in the repository, and adding one is a separate
   decision.

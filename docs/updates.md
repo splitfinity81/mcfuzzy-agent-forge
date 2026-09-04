@@ -4,6 +4,17 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## September 2026 - v3.48
+
+### Cross-package typecheck in CI
+
+- The first CI run went red on both `forge-workflow-engine` legs with `error TS2307: Cannot find module 'gray-matter'`, reported against the *adapter's* `discovery.ts`. This is the defect the workflow was added to find, and it is one that no amount of local testing would have surfaced: locally every package is installed, so the dependency is always present.
+- `forge-workflow-engine` is the only package in the repository that is not self-contained. `engine.ts` dynamically imports `../../forge-execution-adapter/scripts/discovery.ts`; TypeScript resolves literal-specifier dynamic imports and pulls the target into the compilation, and `discovery.ts` imports `gray-matter`. CI installs dependencies per package, so the adapter's `node_modules` is absent on the engine's leg. The bare specifier resolves from `discovery.ts`'s own directory upward, and the engine's `node_modules` is not on that path - the compile-time twin of the runtime failure fixed in v3.46.
+- Fixed in the workflow rather than the source. A `matrix.include` entry gives the engine a `sibling` property, and a step conditional on it runs `npm ci` in the adapter before the typecheck. An `include` entry whose keys match an existing combination merges into it, so the matrix stays at twelve legs and both engine legs pick the property up. Verified by hiding the adapter's `node_modules`: the typecheck exits 2 with the exact CI error, and exits 0 after `npm ci` in the adapter.
+- Narrowing the engine's `tsconfig.json` `include` was tested and rejected. With the adapter's `node_modules` hidden, the typecheck fails identically whether or not the adapter's sources are listed. The coupling is in the import graph, not the glob, so the `include` entry stays where it documents the intent. Adding `gray-matter` to the engine's own dependencies cannot work either, for the same resolution reason. ADR-040 records the full set of rejected alternatives, including the shared-types extraction that would sever the coupling properly.
+
+---
+
 ## September 2026 - v3.47
 
 ### Continuous integration on Windows and Linux
