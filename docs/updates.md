@@ -4,6 +4,57 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## September 2026 - v3.48
+
+### Cross-package typecheck in CI
+
+- The first CI run went red on both `forge-workflow-engine` legs with `error TS2307: Cannot find module 'gray-matter'`, reported against the *adapter's* `discovery.ts`. This is the defect the workflow was added to find, and it is one that no amount of local testing would have surfaced: locally every package is installed, so the dependency is always present.
+- `forge-workflow-engine` is the only package in the repository that is not self-contained. `engine.ts` dynamically imports `../../forge-execution-adapter/scripts/discovery.ts`; TypeScript resolves literal-specifier dynamic imports and pulls the target into the compilation, and `discovery.ts` imports `gray-matter`. CI installs dependencies per package, so the adapter's `node_modules` is absent on the engine's leg. The bare specifier resolves from `discovery.ts`'s own directory upward, and the engine's `node_modules` is not on that path - the compile-time twin of the runtime failure fixed in v3.46.
+- Fixed in the workflow rather than the source. A `matrix.include` entry gives the engine a `sibling` property, and a step conditional on it runs `npm ci` in the adapter before the typecheck. An `include` entry whose keys match an existing combination merges into it, so the matrix stays at twelve legs and both engine legs pick the property up. Verified by hiding the adapter's `node_modules`: the typecheck exits 2 with the exact CI error, and exits 0 after `npm ci` in the adapter.
+- Narrowing the engine's `tsconfig.json` `include` was tested and rejected. With the adapter's `node_modules` hidden, the typecheck fails identically whether or not the adapter's sources are listed. The coupling is in the import graph, not the glob, so the `include` entry stays where it documents the intent. Adding `gray-matter` to the engine's own dependencies cannot work either, for the same resolution reason. ADR-040 records the full set of rejected alternatives, including the shared-types extraction that would sever the coupling properly.
+
+---
+
+## September 2026 - v3.47
+
+### Continuous integration on Windows and Linux
+
+- Added `.github/workflows/ci.yml`. The repository had no `.github/` directory at all: six independently installable packages and 243 tests were verified only by whoever remembered to run them locally, on whichever platform they happened to be on. Every defect fixed in v3.46 would have been caught on the first push by a matrix that runs `npm ci` and `npm test`.
+- The `test` job is a 12-leg matrix - 6 packages x `ubuntu-latest` and `windows-latest` - with `fail-fast: false` so one broken leg does not mask the others. Each leg installs, typechecks, and tests one package from its own directory.
+- Fixed a latent Linux defect found while writing the workflow, symmetrical to the Windows quoting bug in v3.46. `forge-workflow-engine` used `scripts/**/*.test.ts`; npm runs scripts through `sh` on Linux, where `**` is not special without `globstar`, so the pattern degraded to `scripts/*/*.test.ts` and matched **only the 5 files in subdirectories**. The 6 top-level files, including `engine.test.ts` and `verify.test.ts`, were dropped, and npm still exited 0. The `pretest` guard would not have caught it either: it walks the tree in Node and correctly finds 11 files, so it verifies that tests exist, not that the runner received them. The first green Ubuntu run would have skipped more than half the engine's coverage while reporting success.
+- Replaced the recursive glob with explicit per-level patterns, `scripts/*.test.ts scripts/*/*.test.ts`. Under `sh` both expand to 6 + 5 = 11; under `cmd` both pass through literally and Node expands them to 11. Windows is byte-for-byte unchanged at 104 passing, and Linux goes from 5 test files to 11. The trade-off is a hard-coded depth of two, recorded as a known limitation in ADR-040.
+- Pinned CI to Node 22. The launcher's declared `engines.node >= 18` is accurate for its runtime and is left alone, but it is not accurate for running the suites on Windows: npm invokes scripts through `cmd.exe`, which does not expand globs, so the patterns reach Node unexpanded and depend on its built-in `--test` glob support from Node 21.
+- Steps run under `shell: bash` on both runners. The install step is conditional on a lockfile being present, which needs a POSIX shell; Git Bash ships on GitHub's Windows runners, so one code path covers both. `forge-build-agent-team` is the documented exception - no lockfile because it declares no dependencies, and no `typecheck` script because it is plain `.mjs` - handled with `npm install` as the fallback and `npm run typecheck --if-present`.
+- A second job runs `npm run check:version`, enforcing the AGENTS.md rule that the README's `**Latest:**` line tracks the top section of this file. The convention was already relied on and had no enforcement.
+- The workflow requests `permissions: contents: read` and uses no secrets, so it runs correctly under the read-only token given to fork pull requests. npm caching is deliberately not enabled: there is no root lockfile, and `cache-dependency-path` cannot be varied per matrix leg.
+
+---
+
+## September 2026 - v3.46
+
+### Portable npm install and self-verifying test discovery
+
+- Removed a self-referential `file:` dependency from `scripts/forge-launcher/package.json` and pruned the matching lockfile entries. The referenced tarball is gitignored and never present in a fresh clone, so `npm install` failed with `ENOENT` before any build could start.
+- Unquoted the test glob in `templates/skills/forge-workflow-engine/package.json`. It was the only package of six that single-quoted the pattern; PowerShell passes single quotes through literally, so Node matched no files and reported `tests 0` with exit 0. Eleven test files, including `engine.test.ts`, had never run on Windows. The suite now reports 104 passing.
+- Added an `assert-tests-discovered.mjs` `pretest` guard to the workflow engine. `node --test` exits 0 when its pattern matches nothing, so a quoting or path mistake produces a green run with zero coverage; the guard fails the run instead. It walks the tree manually to stay within the package's `node >= 18` floor.
+- Moved the engine's dynamic import of the adapter's discovery module inside its existing `try` block in both `runEngine` and `replayTask`, and surfaced the caught reason. Agent discovery was always designed to be optional, but a module-load failure was escaping as an unhandled `ERR_MODULE_NOT_FOUND` on a public entry point.
+- Replaced POSIX-only `true`/`false` shell builtins in four test fixtures with `exit 0`/`exit 1`, matching the convention already used elsewhere in the same suite. Production verification code was already cross-platform; only the fixtures were affected.
+- Corrected `SKILL.md` and `AGENTS.md`, which described dependency installation as automatic at prep time. No code performed it - the launcher mentioned `npm install` only in hint strings, and the shell wrappers only printed it in error text.
+
+### Bootstrap installs skill dependencies
+
+- `forge-launcher bootstrap` now installs dependencies for every copied skill that declares them, closing the gap the item above documented. It uses `npm ci` where a lockfile exists and `npm install` otherwise. Of the 15 shipped skills, 4 declare dependencies; the rest are prompt-and-markdown only and are skipped without spawning anything.
+- Install failures never abort a bootstrap. The reason is logged as a warning and the completion summary prints the exact per-skill `npm install` commands to run by hand. The install body is also wrapped in `try/catch` because `runCommand` rejects on spawn error, so a machine without `npm` on `PATH` degrades instead of throwing.
+- Added `--no-install` to opt out and restore the previous offline, filesystem-only behaviour. The flag is plumbed to the CLI only; Console call sites keep install-by-default.
+- `npm` is invoked as `npm.cmd` on win32. `runCommand` spawns without `shell: true`, and npm ships on Windows as a `.cmd` shim that bare `spawn` cannot launch - the same hazard `describeSpawnError` already documents.
+- Replicated the `assert-tests-discovered.mjs` `pretest` guard into all six packages, with the filename suffix parameterised so `forge-build-agent-team` can match `.test.mjs`. The script is copied rather than shared, because cross-package coupling is what caused the engine's import defect.
+- Generated the missing `package-lock.json` for `skill-review` so `npm ci` is valid there. `forge-build-agent-team` is intentionally left without one: it declares no dependencies.
+- Fixed the three remaining Windows failures, all test-only. `expandPath` returns the raw expanded string for `$VAR` input on every platform; the console server returns `path.basename`, not a `/`-split; and `discoverForgeRepo` builds `visionPath` with `join`. Production code was already correct in all three cases - only the assertions hard-coded POSIX separators.
+- Verified the engine's degraded path rather than assuming it. With the adapter's `gray-matter` renamed away, the dynamic import rejects with `ERR_MODULE_NOT_FOUND` in 0.2s and is caught cleanly.
+- **All six packages are green on Windows for the first time: 243 passing, 0 failing, exit 0.**
+
+---
+
 ## September 2026 - v3.45
 
 ### Forge Console: synchronize the user guide and Quick help

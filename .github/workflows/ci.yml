@@ -1,0 +1,97 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: ${{ matrix.package }} (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        package:
+          - scripts/forge-launcher
+          - templates/skills/forge-build-agent-team
+          - templates/skills/forge-execution-adapter
+          - templates/skills/forge-workflow-engine
+          - templates/skills/forge-workforce-compiler
+          - templates/skills/skill-review
+        include:
+          # forge-workflow-engine is the only package that is not self-contained:
+          # its tsconfig compiles the adapter's sources, and engine.ts dynamically
+          # imports the adapter's discovery.ts, which imports gray-matter. Bare
+          # specifiers resolve from the importing file's directory, so the engine's
+          # own node_modules cannot satisfy it - the adapter must be installed too.
+          - package: templates/skills/forge-workflow-engine
+            sibling: templates/skills/forge-execution-adapter
+    defaults:
+      run:
+        # bash on both runners keeps the conditional install step and glob
+        # behaviour identical across Windows and Linux.
+        shell: bash
+        working-directory: ${{ matrix.package }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # Node 22 is required, not just preferred: on Windows npm runs scripts
+          # through cmd.exe, which does not expand globs, so the test patterns
+          # reach Node unexpanded and rely on its built-in glob support (Node 21+).
+          node-version: '22'
+
+      - name: Install dependencies
+        # forge-build-agent-team declares no dependencies and ships no lockfile,
+        # so npm ci would fail there.
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install --no-audit --no-fund
+          fi
+
+      - name: Install sibling dependencies
+        # Only set for forge-workflow-engine; see the matrix include above.
+        # The adapter ships a lockfile, so npm ci is safe here.
+        if: matrix.sibling
+        working-directory: ${{ matrix.sibling }}
+        run: npm ci
+
+      - name: Typecheck
+        # forge-build-agent-team is plain .mjs and has no typecheck script.
+        run: npm run typecheck --if-present
+
+      - name: Test
+        run: npm test
+
+  version-consistency:
+    name: Version consistency
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: scripts/forge-launcher
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check README version tracks docs/updates.md
+        run: npm run check:version

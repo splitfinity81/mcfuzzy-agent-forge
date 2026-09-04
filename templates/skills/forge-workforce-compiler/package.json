@@ -5,6 +5,7 @@
   "description": "Compile MyForge artifacts into a FlowForge-compatible .workforce package",
   "scripts": {
     "forge-workforce-compiler": "tsx scripts/cli.ts",
+    "pretest": "node scripts/assert-tests-discovered.mjs",
     "test": "node --import tsx --test scripts/*.test.ts",
     "typecheck": "tsc --noEmit"
   },

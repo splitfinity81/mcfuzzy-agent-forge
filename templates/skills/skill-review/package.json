@@ -5,6 +5,7 @@
   "description": "Skill review - audit skills against best practices and post PR guidance",
   "scripts": {
     "skill-review": "tsx scripts/skill-review.ts",
+    "pretest": "node scripts/assert-tests-discovered.mjs",
     "test": "node --import tsx --test scripts/rubric.test.ts",
     "typecheck": "tsc --noEmit"
   },

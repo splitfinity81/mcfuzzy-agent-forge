@@ -36,14 +36,28 @@ npm run forge-execution-adapter -- compile
 ## Install & Run
 
 > **Runtime requirement:** this skill is a Node package and requires `node >= 18`
-> and `npm` at *build time*. `npm install` (the "node module bootstrap") is not
-> run by `bootstrap.sh` - it is deferred to engine prep time (when you run the
-> engine via `forge-launcher engine-run`, or manually via
-> `scripts/forge-engine-run.sh`). The installed `node_modules/` is
-> gitignored in target repos and must never be committed.
+> and `npm` at *build time*. `forge-launcher bootstrap` installs the dependencies
+> of every copied skill that declares them, so in the normal case there is nothing
+> to do here. Nothing else installs them: neither `forge-launcher engine-run` nor
+> `scripts/forge-engine-run.sh`. The installed `node_modules/` is gitignored in
+> target repos and must never be committed.
+
+If you bootstrapped with `--no-install`, or an install failed (bootstrap warns and
+prints the exact commands rather than aborting), run them yourself before the
+first engine run:
 
 ```bash
 cd .agents/skills/forge-workflow-engine
+npm install
+```
+
+The engine also reads agent files through the adapter's discovery module, which
+has its own dependencies. Bootstrap installs those too; if that step was skipped
+the engine still runs but logs `Could not discover agent files` and skips owner
+matching until you install them:
+
+```bash
+cd .agents/skills/forge-execution-adapter
 npm install
 ```
 
@@ -404,9 +418,16 @@ This gives the same project two mutually exclusive execution modes for a given r
 For FlowForge-kernel execution, compile a workforce package first:
 
 ```bash
+cd .agents/skills/forge-execution-adapter  && npm install
 cd .agents/skills/forge-workforce-compiler && npm install && npm run forge-workforce-compiler -- compile
-cd .agents/skills/forge-workflow-engine   && npm install && npm run workflow-engine -- run --harness flowforge-kernel
+cd .agents/skills/forge-workflow-engine    && npm install && npm run workflow-engine -- run --harness flowforge-kernel
 ```
+
+The `npm install` steps above are already done by `forge-launcher bootstrap`; they
+are listed so the sequence works after a `--no-install` bootstrap or a failed
+install. The adapter install is required for every harness, not just the default
+one: the engine loads the adapter's discovery module at runtime regardless of
+`--harness`.
 
 ---
 

@@ -396,7 +396,7 @@ test("discoverForgeRepo detects the decomposed feature layout", () => {
   const repo = discoverForgeRepo(root);
   assert.equal(repo.sourceLayout, "features");
   assert.equal(repo.featurePaths.length, 3);
-  assert.ok(repo.visionPath.endsWith("docs/product-vision.md"));
+  assert.ok(repo.visionPath.endsWith(join("docs", "product-vision.md")));
 });
 
 test("compileExecutionManifest compiles features in dependency order with feature-tagged ids", () => {
