@@ -13,7 +13,7 @@ const USAGE = `forge-launcher - One command from zero to auto-build
 
 Usage:
   forge-launcher [options]
-  forge-launcher bootstrap [TARGET_DIR] [--harness agents|github|claude|opencode] [--force] [--init-git]
+  forge-launcher bootstrap [TARGET_DIR] [--harness agents|github|claude|opencode] [--force] [--init-git] [--no-install]
   forge-launcher engine-run [--repo <path>] [--harness <h>] [--granularity <fine|coarse>]
                             [--concurrency <n>] [--task-timeout-ms <ms>] [--max-retries <n>]
                             [--retry-delay-ms <ms>] [--heartbeat-ms <ms>] [--yes] [--dry-run]

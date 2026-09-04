@@ -12,6 +12,7 @@
   ],
   "scripts": {
     "build": "tsc && tsc -p tsconfig.client.json && node scripts/copy-client-assets.mjs",
+    "pretest": "node scripts/assert-tests-discovered.mjs",
     "test": "node --import tsx --test scripts/*.test.ts",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.client.json --noEmit",
     "check:version": "tsx scripts/version-consistency.ts",
@@ -23,7 +24,6 @@
   "dependencies": {
     "@clack/prompts": "^1.7.0",
     "cross-spawn": "^7.0.6",
-    "forge-launcher": "file:forge-launcher-1.0.0-beta.4.tgz",
     "semver": "^7.8.5"
   },
   "devDependencies": {

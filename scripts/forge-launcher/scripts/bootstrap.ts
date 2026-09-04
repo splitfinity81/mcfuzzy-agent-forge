@@ -19,6 +19,8 @@ export interface BootstrapOptions {
   force?: boolean;
   initGit?: boolean;
   nonInteractive?: boolean;
+  /** Skips installing dependencies for copied skills; they are listed instead. */
+  skipInstall?: boolean;
   /** When set, all progress output is appended here instead of stdout. */
   logFile?: string;
 }
@@ -66,6 +68,64 @@ function copyTree(srcDir: string, destDir: string, rewrite?: { from: string; to:
       }
     }
   }
+}
+
+/** npm ships as a .cmd shim on Windows, which plain spawn cannot launch by bare name. */
+function npmCommand(): string {
+  return process.platform === "win32" ? "npm.cmd" : "npm";
+}
+
+/** Skills declaring at least one dependency, which copyTree cannot satisfy on its own. */
+export function skillsWithDependencies(skillsDir: string, skillNames: string[]): string[] {
+  const needed: string[] = [];
+  for (const name of skillNames) {
+    const pkgPath = path.join(skillsDir, name, "package.json");
+    if (!fs.existsSync(pkgPath)) continue;
+    let pkg: { dependencies?: Record<string, string>; devDependencies?: Record<string, string> };
+    try {
+      pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
+    } catch {
+      // An unreadable manifest cannot be classified, so surface it rather than
+      // dropping it silently: the caller reports it as needing a manual install.
+      needed.push(name);
+      continue;
+    }
+    const declared = Object.keys(pkg.dependencies ?? {}).length + Object.keys(pkg.devDependencies ?? {}).length;
+    if (declared > 0) needed.push(name);
+  }
+  return needed;
+}
+
+/**
+ * Installs dependencies for freshly copied skills. copyTree excludes node_modules,
+ * so without this the skills are present but unrunnable in the target repository.
+ * Never throws: a failed install degrades to a printed manual command.
+ */
+async function installSkillDeps(
+  skillsDir: string,
+  skillNames: string[],
+  log: { ok: (l: string) => void; warn: (l: string) => void },
+): Promise<string[]> {
+  const failed: string[] = [];
+  for (const name of skillNames) {
+    const dir = path.join(skillsDir, name);
+    const useCi = fs.existsSync(path.join(dir, "package-lock.json"));
+    const verb = useCi ? "ci" : "install";
+    try {
+      const result = await runCommand(npmCommand(), [verb], { cwd: dir, capture: true });
+      if (result.code !== 0) {
+        const detail = (result.stderr || result.stdout).trim().split("\n").filter(Boolean).pop();
+        failed.push(name);
+        log.warn(`Install failed: ${name}/ (${detail || `npm ${verb} exited ${result.code}`})`);
+        continue;
+      }
+      log.ok(`Installed: ${name}/ (npm ${verb})`);
+    } catch (err) {
+      failed.push(name);
+      log.warn(`Install failed: ${name}/ (${err instanceof Error ? err.message : String(err)})`);
+    }
+  }
+  return failed;
 }
 
 function ensureGitignore(targetDir: string): void {
@@ -145,6 +205,7 @@ export async function bootstrap(opts: BootstrapOptions): Promise<number> {
           .map((d) => d.name)
           .sort()
       : [];
+    const copiedSkills: string[] = [];
     for (const skillName of skillDirs) {
       const srcDir = path.join(templatesDir, "skills", skillName);
       const destDir = path.join(skillsDir, skillName);
@@ -157,7 +218,21 @@ export async function bootstrap(opts: BootstrapOptions): Promise<number> {
       }
       fs.rmSync(destDir, { recursive: true, force: true });
       copyTree(srcDir, destDir, rewrite);
+      copiedSkills.push(skillName);
       log.ok(`Copied:  ${skillName}/`);
+    }
+
+    // --- Skill dependencies ---
+    const needsInstall = skillsWithDependencies(skillsDir, copiedSkills);
+    let pendingInstall = needsInstall;
+    if (needsInstall.length > 0) {
+      log.out("");
+      log.out("Dependencies:");
+      if (opts.skipInstall) {
+        log.out(`  Skipped (--no-install): ${needsInstall.join(", ")}`);
+      } else {
+        pendingInstall = await installSkillDeps(skillsDir, needsInstall, log);
+      }
     }
 
     // --- Prompt playbook ---
@@ -188,6 +263,13 @@ export async function bootstrap(opts: BootstrapOptions): Promise<number> {
     log.out("");
     log.out("Bootstrap complete.");
     log.out(`Commit ${root}/agents/ (.md), ${root}/skills/, and docs/ to your repository.`);
+    if (pendingInstall.length > 0) {
+      log.out("");
+      log.out("Install these skill dependencies before running the workflow engine:");
+      for (const name of pendingInstall) {
+        log.out(`  (cd ${path.relative(targetDir, path.join(skillsDir, name)) || "."} && npm install)`);
+      }
+    }
     return 0;
   } finally {
     log.end();
@@ -199,11 +281,13 @@ export async function bootstrapCli(args: string[]): Promise<number> {
   let harness: Harness = "agents";
   let force = false;
   let initGit = false;
+  let skipInstall = false;
   let i = 0;
   for (; i < args.length; i++) {
     const a = args[i];
     if (a === "--force") force = true;
     else if (a === "--init-git") initGit = true;
+    else if (a === "--no-install") skipInstall = true;
     else if (a === "--harness") {
       const v = args[++i];
       if (!v || !(v in HARNESS_ROOTS)) {
@@ -222,5 +306,5 @@ export async function bootstrapCli(args: string[]): Promise<number> {
     }
     targetDir = await prompt("Target repository path [.]", ".");
   }
-  return bootstrap({ targetDir: targetDir || ".", harness, force, initGit, nonInteractive: prompts.nonInteractive });
+  return bootstrap({ targetDir: targetDir || ".", harness, force, initGit, skipInstall, nonInteractive: prompts.nonInteractive });
 }

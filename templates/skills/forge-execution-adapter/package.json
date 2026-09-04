@@ -5,6 +5,7 @@
   "description": "Portable execution adapter tooling for MyForge repositories",
   "scripts": {
     "forge-execution-adapter": "tsx scripts/adapter.ts",
+    "pretest": "node scripts/assert-tests-discovered.mjs",
     "test": "node --import tsx --test scripts/*.test.ts",
     "typecheck": "tsc --noEmit"
   },

@@ -895,7 +895,7 @@ test("output gate: a failing manifest validation command marks the task failed",
 });
 
 test("output gate: a passing manifest validation command allows completion", async () => {
-  const fixture = makeEngineFixture({ validationCommands: ["true"] });
+  const fixture = makeEngineFixture({ validationCommands: ["exit 0"] });
   const harness = new HollowHarness();
   const state = await runEngine(engineOptionsFor(fixture, harness, 1_000, { allowNoop: false, runValidation: true }));
 

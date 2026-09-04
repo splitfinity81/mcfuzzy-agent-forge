@@ -562,13 +562,17 @@ export async function runEngine(opts: EngineOptions): Promise<WorkflowState> {
   });
 
   const agentsDir = manifest.harnessRoot ? `${opts.repoRoot}/${manifest.harnessRoot}/agents` : "";
-  const { discoverForgeRepo } = await import("../../forge-execution-adapter/scripts/discovery.ts");
   let agents: AgentDescriptor[] = [];
   try {
+    // Imported lazily inside the try: discovery lives in the sibling adapter skill and pulls in
+    // its own dependencies, which may not be installed. Agent discovery is optional, so a failure
+    // to load the module must degrade to "no agents" rather than abort the run.
+    const { discoverForgeRepo } = await import("../../forge-execution-adapter/scripts/discovery.ts");
     const repo = discoverForgeRepo(opts.repoRoot);
     agents = repo.agents;
-  } catch {
-    console.warn("[engine] Could not discover agent files; owner matching will be skipped.");
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err);
+    console.warn(`[engine] Could not discover agent files; owner matching will be skipped. (${reason})`);
   }
 
   const store = new ArtifactStore({ artifactsPath: opts.artifactsPath });
@@ -724,13 +728,14 @@ export async function replayTask(taskId: string, opts: EngineOptions): Promise<W
     },
   };
 
-  const { discoverForgeRepo } = await import("../../forge-execution-adapter/scripts/discovery.ts");
   let agents: AgentDescriptor[] = [];
   try {
+    const { discoverForgeRepo } = await import("../../forge-execution-adapter/scripts/discovery.ts");
     const repo = discoverForgeRepo(opts.repoRoot);
     agents = repo.agents;
-  } catch {
-    console.warn("[engine] Could not discover agent files.");
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err);
+    console.warn(`[engine] Could not discover agent files. (${reason})`);
   }
 
   const store = new ArtifactStore({ artifactsPath: opts.artifactsPath });

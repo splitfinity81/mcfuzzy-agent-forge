@@ -4,6 +4,31 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## September 2026 - v3.46
+
+### Portable npm install and self-verifying test discovery
+
+- Removed a self-referential `file:` dependency from `scripts/forge-launcher/package.json` and pruned the matching lockfile entries. The referenced tarball is gitignored and never present in a fresh clone, so `npm install` failed with `ENOENT` before any build could start.
+- Unquoted the test glob in `templates/skills/forge-workflow-engine/package.json`. It was the only package of six that single-quoted the pattern; PowerShell passes single quotes through literally, so Node matched no files and reported `tests 0` with exit 0. Eleven test files, including `engine.test.ts`, had never run on Windows. The suite now reports 104 passing.
+- Added an `assert-tests-discovered.mjs` `pretest` guard to the workflow engine. `node --test` exits 0 when its pattern matches nothing, so a quoting or path mistake produces a green run with zero coverage; the guard fails the run instead. It walks the tree manually to stay within the package's `node >= 18` floor.
+- Moved the engine's dynamic import of the adapter's discovery module inside its existing `try` block in both `runEngine` and `replayTask`, and surfaced the caught reason. Agent discovery was always designed to be optional, but a module-load failure was escaping as an unhandled `ERR_MODULE_NOT_FOUND` on a public entry point.
+- Replaced POSIX-only `true`/`false` shell builtins in four test fixtures with `exit 0`/`exit 1`, matching the convention already used elsewhere in the same suite. Production verification code was already cross-platform; only the fixtures were affected.
+- Corrected `SKILL.md` and `AGENTS.md`, which described dependency installation as automatic at prep time. No code performed it - the launcher mentioned `npm install` only in hint strings, and the shell wrappers only printed it in error text.
+
+### Bootstrap installs skill dependencies
+
+- `forge-launcher bootstrap` now installs dependencies for every copied skill that declares them, closing the gap the item above documented. It uses `npm ci` where a lockfile exists and `npm install` otherwise. Of the 15 shipped skills, 4 declare dependencies; the rest are prompt-and-markdown only and are skipped without spawning anything.
+- Install failures never abort a bootstrap. The reason is logged as a warning and the completion summary prints the exact per-skill `npm install` commands to run by hand. The install body is also wrapped in `try/catch` because `runCommand` rejects on spawn error, so a machine without `npm` on `PATH` degrades instead of throwing.
+- Added `--no-install` to opt out and restore the previous offline, filesystem-only behaviour. The flag is plumbed to the CLI only; Console call sites keep install-by-default.
+- `npm` is invoked as `npm.cmd` on win32. `runCommand` spawns without `shell: true`, and npm ships on Windows as a `.cmd` shim that bare `spawn` cannot launch - the same hazard `describeSpawnError` already documents.
+- Replicated the `assert-tests-discovered.mjs` `pretest` guard into all six packages, with the filename suffix parameterised so `forge-build-agent-team` can match `.test.mjs`. The script is copied rather than shared, because cross-package coupling is what caused the engine's import defect.
+- Generated the missing `package-lock.json` for `skill-review` so `npm ci` is valid there. `forge-build-agent-team` is intentionally left without one: it declares no dependencies.
+- Fixed the three remaining Windows failures, all test-only. `expandPath` returns the raw expanded string for `$VAR` input on every platform; the console server returns `path.basename`, not a `/`-split; and `discoverForgeRepo` builds `visionPath` with `join`. Production code was already correct in all three cases - only the assertions hard-coded POSIX separators.
+- Verified the engine's degraded path rather than assuming it. With the adapter's `gray-matter` renamed away, the dynamic import rejects with `ERR_MODULE_NOT_FOUND` in 0.2s and is caught cleanly.
+- **All six packages are green on Windows for the first time: 243 passing, 0 failing, exit 0.**
+
+---
+
 ## September 2026 - v3.45
 
 ### Forge Console: synchronize the user guide and Quick help
