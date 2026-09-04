@@ -4,6 +4,27 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## September 2026 - v3.49
+
+### Removed an unfixable advisory by removing the dependency
+
+- `skill-review` reported one moderate advisory against `qs@6.15.3`, reached through `azure-devops-node-api` -> `typed-rest-client`. `npm audit fix` reported a fix was available but changed nothing, and the reason is that the fix does not exist: both advisories name `qs@6.16.0` as the fixed version, and the highest published 6.x release is `6.15.3`. Upgrading the SDK is worse rather than better - `azure-devops-node-api@17` depends on `typed-rest-client@3.1.0`, which pins `qs` to `6.15.3` exactly, replacing a permissive range with a hard pin on the vulnerable version.
+- The dependency was never used. An exhaustive search for the package name and its API surface across the whole repository returned exactly one hit: the declaration in `package.json`. `scripts/providers/ado.ts` does talk to Azure DevOps, but over the REST API with the global `fetch` and hand-built authorization headers; it imports nothing from the SDK.
+- Removed it. `skill-review` goes from 1 moderate advisory to 0 and from 90 dependencies to 67, with typecheck and tests unchanged at exit 0. ADR-041 records the rule this establishes: when an advisory has no published fix, check whether the dependency is needed at all before reaching for an upgrade.
+
+### Dependency updates, code owners, and a pull request template
+
+- Added `.github/dependabot.yml`. There is no root `package.json`, so each package needs its own entry; updates are grouped per package so a routine bump arrives as one pull request instead of a dozen. `forge-build-agent-team` is deliberately absent because it declares no dependencies and ships no lockfile. GitHub Actions versions are tracked on the same weekly schedule.
+- Added `.github/CODEOWNERS` and `.github/pull_request_template.md`. The template's checklist encodes the conventions in `AGENTS.md` that `npm run check:version` cannot catch on its own: the changelog entry, the README version bump, the ADR, and the per-package verification commands. ADR-040 recorded the absence of both files as part of the original gap; this closes it.
+
+### Pinned the workflow actions to v7
+
+- `actions/checkout` and `actions/setup-node` moved from v4 to v7, clearing the Node 20 deprecation warnings on all thirteen jobs.
+- Three majors of breaking changes were reviewed and none apply. `checkout@v7` blocks fork checkout under `pull_request_target` and `workflow_run`; this workflow uses plain `pull_request`. `setup-node@v5` began enabling caching automatically when `package.json` declares a `packageManager` field, and v6 narrowed that to npm - neither matters here because no manifest declares `packageManager` and there is no root `package.json` at all.
+- That last point is a latent trap rather than a current bug, so it is now recorded as a comment in the workflow beside the `setup-node` step: adding a root `package.json` with a `packageManager` field would switch caching on, send the action looking for a root lockfile that does not exist, and fail every leg. The lockfiles live in the six package directories.
+
+---
+
 ## September 2026 - v3.48
 
 ### Cross-package typecheck in CI

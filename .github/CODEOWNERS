@@ -1,0 +1,14 @@
+# Code owners are requested for review automatically on every pull request.
+# Later matches win, so the catch-all comes first.
+
+*                               @splitfinity81
+
+# Build and release plumbing: a break here takes down every package at once.
+/.github/                       @splitfinity81
+/scripts/forge-launcher/        @splitfinity81
+
+# Architecture decisions and the changelog are the project's memory - changes
+# here should be reviewed for accuracy, not just for style.
+/docs/adr/                      @splitfinity81
+/docs/updates.md                @splitfinity81
+/AGENTS.md                      @splitfinity81
