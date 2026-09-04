@@ -4,6 +4,21 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## September 2026 - v3.47
+
+### Continuous integration on Windows and Linux
+
+- Added `.github/workflows/ci.yml`. The repository had no `.github/` directory at all: six independently installable packages and 243 tests were verified only by whoever remembered to run them locally, on whichever platform they happened to be on. Every defect fixed in v3.46 would have been caught on the first push by a matrix that runs `npm ci` and `npm test`.
+- The `test` job is a 12-leg matrix - 6 packages x `ubuntu-latest` and `windows-latest` - with `fail-fast: false` so one broken leg does not mask the others. Each leg installs, typechecks, and tests one package from its own directory.
+- Fixed a latent Linux defect found while writing the workflow, symmetrical to the Windows quoting bug in v3.46. `forge-workflow-engine` used `scripts/**/*.test.ts`; npm runs scripts through `sh` on Linux, where `**` is not special without `globstar`, so the pattern degraded to `scripts/*/*.test.ts` and matched **only the 5 files in subdirectories**. The 6 top-level files, including `engine.test.ts` and `verify.test.ts`, were dropped, and npm still exited 0. The `pretest` guard would not have caught it either: it walks the tree in Node and correctly finds 11 files, so it verifies that tests exist, not that the runner received them. The first green Ubuntu run would have skipped more than half the engine's coverage while reporting success.
+- Replaced the recursive glob with explicit per-level patterns, `scripts/*.test.ts scripts/*/*.test.ts`. Under `sh` both expand to 6 + 5 = 11; under `cmd` both pass through literally and Node expands them to 11. Windows is byte-for-byte unchanged at 104 passing, and Linux goes from 5 test files to 11. The trade-off is a hard-coded depth of two, recorded as a known limitation in ADR-040.
+- Pinned CI to Node 22. The launcher's declared `engines.node >= 18` is accurate for its runtime and is left alone, but it is not accurate for running the suites on Windows: npm invokes scripts through `cmd.exe`, which does not expand globs, so the patterns reach Node unexpanded and depend on its built-in `--test` glob support from Node 21.
+- Steps run under `shell: bash` on both runners. The install step is conditional on a lockfile being present, which needs a POSIX shell; Git Bash ships on GitHub's Windows runners, so one code path covers both. `forge-build-agent-team` is the documented exception - no lockfile because it declares no dependencies, and no `typecheck` script because it is plain `.mjs` - handled with `npm install` as the fallback and `npm run typecheck --if-present`.
+- A second job runs `npm run check:version`, enforcing the AGENTS.md rule that the README's `**Latest:**` line tracks the top section of this file. The convention was already relied on and had no enforcement.
+- The workflow requests `permissions: contents: read` and uses no secrets, so it runs correctly under the read-only token given to fork pull requests. npm caching is deliberately not enabled: there is no root lockfile, and `cache-dependency-path` cannot be varied per matrix leg.
+
+---
+
 ## September 2026 - v3.46
 
 ### Portable npm install and self-verifying test discovery
