@@ -24,13 +24,17 @@ export function renderProjects(container: HTMLElement): void {
     el("p", { className: "dim" }, "Select a forge repo from your list, or add a folder you have on disk."),
   );
 
+  const selectEl = el("select", { className: "project-select" }) as HTMLSelectElement;
+  const metaEl = el("div", { className: "dim small" });
+  select = selectEl;
+  meta = metaEl;
   const list = el("div", { className: "panel" }, [
     el("h4", null, "Your projects"),
     el("div", { className: "dropdown-row" }, [
-      (select = el("select", { className: "project-select" }) as HTMLSelectElement),
+      selectEl,
       el("button", { className: "btn btn-primary" }, "Open"),
     ]),
-    (meta = el("div", { className: "dim small" })),
+    metaEl,
   ]);
   const openBtn = list.querySelector<HTMLElement>("button");
   if (openBtn) openBtn.addEventListener("click", () => openSelected());

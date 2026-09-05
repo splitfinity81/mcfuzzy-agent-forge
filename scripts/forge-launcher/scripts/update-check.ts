@@ -100,7 +100,7 @@ export function writeCache(latest: string, file = cachePath()): void {
 
 /** A cached result is fresh when it was written within the TTL window. */
 export function cacheFresh(cache: UpdateCache | null, now = Date.now()): boolean {
-  if (!cache || !cache.checkedAt || !cache.latest) return false;
+  if (!cache?.checkedAt || !cache.latest) return false;
   const checked = Date.parse(cache.checkedAt);
   if (Number.isNaN(checked)) return false;
   return now - checked < CACHE_TTL_MS;

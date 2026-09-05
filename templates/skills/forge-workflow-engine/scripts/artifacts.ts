@@ -24,7 +24,7 @@ import {
   readFileSync,
   writeFileSync,
 } from "node:fs";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 
 import type { Artifact, ArtifactProjection } from "../../forge-execution-adapter/scripts/types.ts";
 

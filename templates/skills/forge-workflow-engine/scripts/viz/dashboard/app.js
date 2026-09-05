@@ -1,4 +1,5 @@
 /* global Pixi */
+// biome-ignore lint/suspicious/noRedundantUseStrict: index.html loads this via a plain <script src>, not type="module", so strict mode is not implicit here.
 "use strict";
 
 // ─── The Forge Board — live workflow kanban ───────────────────────────────────
@@ -36,7 +37,7 @@ function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 
 function lerp(a, b, t) { return a + (b - a) * t; }
 
-function easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
+function easeOutCubic(t) { return 1 - (1 - t) ** 3; }
 
 function $id(id) { return document.getElementById(id); }
 
@@ -224,8 +225,8 @@ function truncate(text, maxChars) {
 
   // ── Camera pan / zoom ────────────────────────────────────────────────────
   let dragging = false;
-  let dragStart = new P.Point();
-  let worldStart = new P.Point();
+  const dragStart = new P.Point();
+  const worldStart = new P.Point();
   let scale = 1;
 
   function resize() {
@@ -263,7 +264,7 @@ function truncate(text, maxChars) {
   });
   app.stage.on("wheel", (e) => {
     e.preventDefault();
-    const factor = Math.pow(1.0015, -e.deltaY);
+    const factor = 1.0015 ** -e.deltaY;
     // Max zoom 2.0 matches the 2x text/texture baking; beyond that content
     // upscales and goes soft.
     const newScale = clamp(scale * factor, 0.25, 2.0);
@@ -399,7 +400,9 @@ function truncate(text, maxChars) {
     headerTexts.length = 0;
     for (const t of phaseNameTexts.values()) t.destroy();
     phaseNameTexts.clear();
-    labelLayer.removeChildren().forEach((c) => c.destroy());
+    labelLayer.removeChildren().forEach((c) => {
+      c.destroy();
+    });
   }
 
   /** Redraws the board graphics (column separators + phase bands + labels). */
@@ -534,7 +537,9 @@ function truncate(text, maxChars) {
 
     // Badges (context projection, artifact). Right-aligned on their own row
     // below the id text, truncated so they never cover the name/title/id.
-    entry.badgeLayer.removeChildren().forEach((c) => c.destroy());
+    entry.badgeLayer.removeChildren().forEach((c) => {
+      c.destroy();
+    });
     const badgeRowY = 47;
     const badgeMaxW = cardW - 70; // keep clear of the avatar + text column (x < 58)
     const makeBadge = (text, fill) => new P.Text({ text, style: textStyle({ fontSize: 9, fill }) });
@@ -567,7 +572,6 @@ function truncate(text, maxChars) {
   const DETAIL_FONT = 10;
   const DETAIL_PAD_X = 12;
   const DETAIL_LABEL_W = 110; // label column width; values sit to the right of it
-  const DETAIL_ROW_GAP = 3;
   const DETAIL_BOTTOM_PAD = 12;
   const DETAIL_ROW_H = 17; // fixed row step (measurement-safe, roomy)
   const EXPAND_W = 150; // extra width when a card is expanded (detail spills right)
@@ -593,7 +597,9 @@ function truncate(text, maxChars) {
   function buildDetail(entry) {
     const task = manifestTaskFor(entry.task.id) || entry.task;
     const layer = entry.detailLayer;
-    layer.removeChildren().forEach((c) => c.destroy());
+    layer.removeChildren().forEach((c) => {
+      c.destroy();
+    });
     entry.detailTexts.length = 0;
 
     const w = entryW(entry);
@@ -657,10 +663,10 @@ function truncate(text, maxChars) {
     if (task.timeoutMs) row("Timeout", `${Math.round(task.timeoutMs / 1000)}s`);
     if (entry.artifactId) row("Artifact", String(entry.artifactId));
     if (entry.errorMessage) row("Error", long(entry.errorMessage), 0xff8f8f);
-    if (task.inputs && task.inputs.length) row("Inputs", long(task.inputs.join(", ")));
-    if (task.dependencies && task.dependencies.length) row("Dependencies", long(task.dependencies.join(", ")));
-    if (task.expectedOutputs && task.expectedOutputs.length) row("Outputs", long(task.expectedOutputs.join(", ")));
-    if (task.validationCommands && task.validationCommands.length) row("Validation", long(task.validationCommands.join("; ")));
+    if (task.inputs?.length) row("Inputs", long(task.inputs.join(", ")));
+    if (task.dependencies?.length) row("Dependencies", long(task.dependencies.join(", ")));
+    if (task.expectedOutputs?.length) row("Outputs", long(task.expectedOutputs.join(", ")));
+    if (task.validationCommands?.length) row("Validation", long(task.validationCommands.join("; ")));
 
     return y - (GEOM.cardH + 8) + DETAIL_BOTTOM_PAD;
   }
@@ -810,7 +816,6 @@ function truncate(text, maxChars) {
     expandedEntry = null;
     clearLabels();
 
-    const colKeys = ["pending", "running", "complete", "failed"];
     const colLabels = { pending: "To Do", running: "In Progress", complete: "Done", failed: "Failed" };
     for (const col of resolved.columns) {
       state.columns.set(col.key, { x: col.x, width: col.width, label: col.label || colLabels[col.key] || col.key });

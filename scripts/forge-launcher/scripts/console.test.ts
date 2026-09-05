@@ -187,8 +187,8 @@ function collectSse(url: string) {
     let eventType = "message";
     res.on("data", (chunk: Buffer) => {
       buffer += chunk.toString("utf8");
-      let idx;
-      while ((idx = buffer.indexOf("\n\n")) >= 0) {
+      let idx = buffer.indexOf("\n\n");
+      while (idx >= 0) {
         const block = buffer.slice(0, idx);
         buffer = buffer.slice(idx + 2);
         let data = "";
@@ -198,6 +198,7 @@ function collectSse(url: string) {
         }
         if (data) events.push({ type: eventType, data: JSON.parse(data) });
         eventType = "message";
+        idx = buffer.indexOf("\n\n");
       }
     });
   });
@@ -362,7 +363,7 @@ test("control POST is rejected without the token", async () => {
 });
 
 test("run and replay spawn detached processes via the injected spawner", async () => {
-  await withServer(async (server, repo, spawned) => {
+  await withServer(async (server, _repo, spawned) => {
     const token = server.token;
 
     const run = await postJson(`${server.url}/api/control`, { action: "run" }, { "X-Forge-Token": token });
@@ -610,7 +611,7 @@ test("engine-config toggles auto-commit and flows into engine-run args", async (
 
     const on = await postJson(`${server.url}/api/engine-config`, { autoCommit: true }, { "X-Forge-Token": token });
     assert.equal((on.body as { ok: boolean }).ok, true);
-    const run2 = await postJson(`${server.url}/api/control`, { action: "run" }, { "X-Forge-Token": token });
+    await postJson(`${server.url}/api/control`, { action: "run" }, { "X-Forge-Token": token });
     assert.ok(!spawned.calls.at(-1)!.args.includes("--no-auto-commit"), "default on: no --no-auto-commit flag");
   });
 });

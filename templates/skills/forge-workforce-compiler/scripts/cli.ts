@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { existsSync, readdirSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { join, resolve } from "node:path";
 
 import { compileWorkforcePackage } from "./compiler.ts";
 import { detectRepoRoot, discoverForgeRepo } from "./discovery.ts";

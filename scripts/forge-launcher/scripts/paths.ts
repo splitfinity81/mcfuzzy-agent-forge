@@ -16,7 +16,7 @@ export function expandEnv(s: string): string {
  * then expands a leading `~` / `~/...` / `~user` to a home directory.
  */
 export function expandPath(input: string): string {
-  let p = expandEnv(input).trim();
+  const p = expandEnv(input).trim();
   if (p === "~") return os.homedir();
   if (p.startsWith("~/")) return path.join(os.homedir(), p.slice(2));
   if (p.startsWith("~")) {

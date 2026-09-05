@@ -1,5 +1,5 @@
 import { execSync } from "node:child_process";
-import { existsSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readdirSync, statSync, type Stats } from "node:fs";
 import { resolve, join, basename } from "node:path";
 
 /**
@@ -40,7 +40,7 @@ export function findSkillFiles(dir: string): string[] {
     }
     for (const entry of entries) {
       const full = join(current, entry);
-      let st;
+      let st: Stats;
       try {
         st = statSync(full);
       } catch {

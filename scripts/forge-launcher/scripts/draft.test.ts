@@ -16,7 +16,7 @@ const GIT_ENV = {
 };
 
 function runCli(args: string[], env: Record<string, string> = {}): Promise<{ code: number; out: string }> {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
     execFile(
       "node",
       ["--import", "tsx", CLI, ...args],

@@ -102,6 +102,7 @@ test("skillsWithDependencies selects only skills that declare dependencies", () 
   assert.deepEqual(found, ["runtime-deps", "dev-deps", "unparseable"]);
 });
 
+// biome-ignore lint/suspicious/noTemplateCurlyInString: the literal ${VAR} names the syntax under test.
 test("expandPath expands ~, ~/..., $VAR and ${VAR}", () => {
   assert.equal(expandPath("~"), os.homedir());
   assert.equal(expandPath("~/x"), path.join(os.homedir(), "x"));
@@ -109,6 +110,7 @@ test("expandPath expands ~, ~/..., $VAR and ${VAR}", () => {
   // $VAR expansion is textual substitution, so the separator is preserved as written
   // rather than normalised to the platform separator.
   assert.equal(expandPath("$FL_TEST_HOME/y"), "/tmp/y");
+  // biome-ignore lint/suspicious/noTemplateCurlyInString: ${VAR} is the input syntax being expanded, not an interpolation.
   assert.equal(expandPath("${FL_TEST_HOME}/y"), "/tmp/y");
   delete process.env.FL_TEST_HOME;
 });

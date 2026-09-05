@@ -386,6 +386,8 @@ body[data-view="board"] #view { max-width: none; padding: 16px; }
 .action-card p { margin: 0; flex: 1; }
 .action-card .btn { align-self: flex-start; }
 
+.project-select { width: 100%; max-width: 640px; }
+
 .dropdown-row {
   display: flex;
   gap: 8px;
@@ -399,7 +401,6 @@ body[data-view="board"] #view { max-width: none; padding: 16px; }
   max-width: 560px;
   width: auto;
 }
-.project-select { width: 100%; max-width: 640px; }
 
 /* ── Collapsible sections (Plan & Team) ─────────────────────── */
 

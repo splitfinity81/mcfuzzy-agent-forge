@@ -1024,7 +1024,7 @@ function commandExists(cmd: string): boolean {
 
 // --- Step 2: Select harness ------------------------------------------------
 
-async function selectHarness(opts: LauncherOptions): Promise<void> {
+async function selectHarness(_opts: LauncherOptions): Promise<void> {
   step("Step 2 of 9: Select agent harness");
   out("");
 
@@ -2097,7 +2097,6 @@ function completionSummary(): void {
   out("  Next steps:");
   out("");
   if (state.engineStarted) {
-    const engineHarness = process.env.FORGE_ENGINE_HARNESS ?? "opencode";
     out("  1. The workflow engine is building the project in the background");
     out("     (it keeps running after this launcher exits).");
     out("  2. Monitor progress from another terminal:");

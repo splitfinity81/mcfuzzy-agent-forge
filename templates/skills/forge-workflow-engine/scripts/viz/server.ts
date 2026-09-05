@@ -1,7 +1,7 @@
 import { createServer, type Server } from "node:http";
 import { spawn } from "node:child_process";
 import { existsSync, openSync, readFileSync, readSync, closeSync, statSync } from "node:fs";
-import { dirname, extname, join } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import type { AuditEvent } from "../types.ts";
@@ -189,7 +189,6 @@ export function openBrowser(url: string, spawnProcess: typeof spawn = spawn): vo
 
 export async function startVizServer(options: VizServerOptions): Promise<VizServer> {
   const {
-    repoRoot,
     manifestPath,
     statePath,
     auditPath,

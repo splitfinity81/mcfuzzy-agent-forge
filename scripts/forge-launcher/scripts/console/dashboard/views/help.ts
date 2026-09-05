@@ -30,7 +30,9 @@ export function openHelp(): void {
   tabs.querySelector<HTMLElement>(".tab")?.classList.add("active");
   tabs.querySelectorAll<HTMLElement>(".tab").forEach((tab, i) => {
     tab.addEventListener("click", () => {
-      tabs.querySelectorAll<HTMLElement>(".tab").forEach((t) => t.classList.remove("active"));
+      tabs.querySelectorAll<HTMLElement>(".tab").forEach((t) => {
+        t.classList.remove("active");
+      });
       tab.classList.add("active");
       dialog.classList.toggle("guide-mode", i === 1);
       body.textContent = "";

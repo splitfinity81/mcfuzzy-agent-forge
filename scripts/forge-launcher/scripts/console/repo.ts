@@ -279,7 +279,7 @@ function currentJob(repoRoot: string): BackgroundJob | null {
 
 // ─── Summary ─────────────────────────────────────────────────────────────────
 
-function runSummary(p: RepoPaths, state: WorkflowState | null, manifest: ExecutionManifest | null): RunSummary | null {
+function runSummary(_p: RepoPaths, state: WorkflowState | null, manifest: ExecutionManifest | null): RunSummary | null {
   if (!state) return null;
   const counts = { pending: 0, running: 0, complete: 0, failed: 0, skipped: 0 };
   const visible = scopedTaskIds(state);
@@ -367,13 +367,6 @@ export function summary(p: RepoPaths): Summary {
 }
 
 // ─── Tasks ───────────────────────────────────────────────────────────────────
-
-function findPhaseFor(manifest: ExecutionManifest, taskId: string): { id: string; title: string } | null {
-  for (const ph of manifest.phases) {
-    if (ph.tasks.some((t) => t.id === taskId)) return { id: ph.id, title: ph.title };
-  }
-  return null;
-}
 
 export function tasks(p: RepoPaths): TaskRow[] {
   const manifest = loadManifest(p);

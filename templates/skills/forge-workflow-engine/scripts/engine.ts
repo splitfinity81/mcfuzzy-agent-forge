@@ -2,7 +2,6 @@ import { readFileSync } from "node:fs";
 
 import type {
   AgentDescriptor,
-  AuditEvent,
   ExecutionMode,
   EngineOptions,
   ExecutionManifest,
@@ -15,8 +14,6 @@ import type {
 } from "./types.ts";
 
 import {
-  appendAuditEvent,
-  auditPath as defaultAuditPath,
   findPhaseForTask,
   findTask,
   initState,
@@ -29,7 +26,6 @@ import {
   saveState,
   setCurrentPhase,
   setSelection,
-  statePath as defaultStatePath,
   syncProgressMd,
   writeAuditEvent,
 } from "./state.ts";
@@ -82,7 +78,7 @@ export function isTaskDone(status: TaskStatus | undefined): boolean {
 }
 
 export function allDepsComplete(
-  taskId: string,
+  _taskId: string,
   deps: string[],
   state: WorkflowState,
 ): boolean {
@@ -92,11 +88,6 @@ export function allDepsComplete(
 function findAgentForTask(agents: AgentDescriptor[], ownerName: string | undefined): AgentDescriptor | undefined {
   if (!ownerName) return undefined;
   return agents.find((a) => a.name === ownerName);
-}
-
-function emit(event: AuditEvent, opts: EngineOptions): WorkflowState {
-  writeAuditEvent(opts.auditPath, event);
-  return event as unknown as WorkflowState;
 }
 
 // ─── DAG ordering ─────────────────────────────────────────────────────────────
@@ -194,7 +185,7 @@ export function nextReadyTasks(manifest: ExecutionManifest, state: WorkflowState
   for (const entry of flat) {
     if (selected && !selected.has(entry.task.id)) continue;
     const record = state.tasks[entry.task.id];
-    if (!record || record.status !== "pending") continue;
+    if (record?.status !== "pending") continue;
 
     const phaseDepsOk = manifest.phases[entry.phaseIndex]?.dependencies.every(
       (depPhaseId) => {
@@ -561,7 +552,6 @@ export async function runEngine(opts: EngineOptions): Promise<WorkflowState> {
     note: `harness=${opts.harness.name}`,
   });
 
-  const agentsDir = manifest.harnessRoot ? `${opts.repoRoot}/${manifest.harnessRoot}/agents` : "";
   let agents: AgentDescriptor[] = [];
   try {
     // Imported lazily inside the try: discovery lives in the sibling adapter skill and pulls in

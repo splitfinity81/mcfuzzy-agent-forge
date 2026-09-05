@@ -12,7 +12,6 @@ import {
   readCache,
   registryUrl,
   shouldCheck,
-  writeCache,
   type UpdateCache,
 } from "./update-check.ts";
 

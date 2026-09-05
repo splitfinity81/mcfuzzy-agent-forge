@@ -233,7 +233,7 @@ function scoreValidation(skillMd: string, hasScriptsDirOnDisk: boolean): number 
  * Check structural / metadata issues.
  */
 function checkStructural(
-  name: string,
+  _name: string,
   parentDir: string,
   rawFrontmatter: Record<string, unknown>,
   skillMd: string,
@@ -426,7 +426,7 @@ function buildImprovements(scores: Score[]): string[] {
     });
 }
 
-function buildSuggestedChanges(scores: Score[], skillMd: string, hasRefsDirOnDisk: boolean, hasAssetsDirOnDisk: boolean, hasScriptsDirOnDisk: boolean): string[] {
+function buildSuggestedChanges(scores: Score[], skillMd: string, hasRefsDirOnDisk: boolean, hasAssetsDirOnDisk: boolean, _hasScriptsDirOnDisk: boolean): string[] {
   const changes: string[] = [];
 
   for (const s of scores) {
