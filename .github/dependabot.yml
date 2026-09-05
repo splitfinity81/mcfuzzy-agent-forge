@@ -1,8 +1,9 @@
 version: 2
 
-# This repo has no root package.json - each package is installed and tested from
-# its own directory, so every package needs its own entry here. Updates are
-# grouped per package so a routine bump is one pull request, not a dozen.
+# Each shippable package is installed and tested from its own directory, so every
+# package needs its own entry here. The root entry covers the tooling-only
+# manifest that pins Biome. Updates are grouped per package so a routine bump is
+# one pull request, not a dozen.
 #
 # templates/skills/forge-build-agent-team is deliberately absent: it declares no
 # dependencies and ships no lockfile, so there is nothing for Dependabot to do.
@@ -14,6 +15,15 @@ updates:
       interval: weekly
     groups:
       actions:
+        patterns:
+          - "*"
+
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      root-tooling:
         patterns:
           - "*"
 

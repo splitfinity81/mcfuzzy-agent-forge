@@ -4,6 +4,25 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## September 2026 - v3.50
+
+### Linting, with the noise turned off rather than tolerated
+
+- Added Biome at the repository root and wired a `lint` job into CI. Biome was chosen over ESLint because it is a single native binary with no plugin graph, it lints TypeScript, plain JavaScript, and CSS out of one config, and it runs over all 127 tracked files in about 0.2 seconds - fast enough that a green lint is a precondition for committing rather than a chore.
+- Linting is repo-wide, not per-package. That required a root `package.json`, which this repo had never had. It is tooling-only and deliberately omits a `packageManager` field: `actions/setup-node` v5+ auto-enables npm caching when it sees one and then fails looking for a root lockfile layout that does not exist here, which would break every leg of the test matrix. Both the manifest and the workflow carry comments saying so.
+- The formatter is configured but disabled. Turning it on would rewrite most of the repository in a single commit and bury the substantive changes, so it is left as a separate, deliberate decision.
+- The first run reported 8952 diagnostics. 8619 of them - 96% - came from one vendored file, `pixi.min.js`, which is third-party and minified. Excluding vendored code left 333 real findings.
+- Of those 333, 274 came from three purely cosmetic rules: `useLiteralKeys`, `noNonNullAssertion`, and `useTemplate`. They were disabled rather than fixed. A rule that produces 82% of the noise and has never caught a defect is a rule that trains people to ignore the linter.
+- The remaining 59 were fixed: unused imports, variables, parameters and dead functions removed; assignments hoisted out of `while` conditions; implicit `any` on `let` annotated; `forEach` callbacks with implicit returns given braces; redundant `&& x.length` guards replaced with optional chaining. Two CSS findings were handled on their merits - a descending-specificity rule was reordered (a no-op, since the more specific rule wins regardless of source order), and a `!important` on a `.hidden` utility class was suppressed with a reason, because there it is load-bearing.
+- All six packages still typecheck and test clean afterwards: 243 tests passing, zero failures.
+
+### Two findings worth recording
+
+- **Biome's unsafe autofix is not safe.** `biome lint --write --unsafe` took the count from 333 to 92, but it touched 49 files, rewrote non-null assertions `a!.b` into optional chains `a?.b` - a real change in runtime behaviour, not a cleanup - and introduced three brand-new diagnostics of its own. Only the plain `--write` autofix is used, and `lint:fix` is documented accordingly.
+- **`noRedundantUseStrict` misfired on a classic script.** The safe autofix deleted `"use strict";` from the visualiser dashboard's `app.js`. The rule assumes ES-module context, where strict mode is implicit - but `index.html` loads that file with a plain `<script src>`, no `type="module"`, so the directive is load-bearing and removing it silently changes the semantics of the whole file. Restored, with an inline suppression explaining why. The launcher's own dashboard is genuinely a module and is unaffected, which is precisely why the two had to be checked separately rather than assumed symmetrical.
+
+---
+
 ## September 2026 - v3.49
 
 ### Removed an unfixable advisory by removing the dependency

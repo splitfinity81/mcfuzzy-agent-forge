@@ -54,9 +54,10 @@ jobs:
           # Dependency caching stays off. setup-node v5+ turns npm caching on
           # automatically when the repo-root package.json declares a
           # "packageManager" field, then fails the job if no lockfile is found to
-          # key on. This repo has no root package.json, so that never fires - but
-          # adding one with "packageManager" would break every leg of this matrix,
-          # because the lockfiles live in the per-package directories.
+          # key on. The root package.json is tooling-only (Biome) and deliberately
+          # omits "packageManager" for exactly this reason - adding it would break
+          # every leg of this matrix, because the lockfiles these jobs install
+          # from live in the per-package directories, not at the root.
 
       - name: Install dependencies
         # forge-build-agent-team declares no dependencies and ships no lockfile,
@@ -81,6 +82,26 @@ jobs:
 
       - name: Test
         run: npm test
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+
+      - name: Install tooling
+        # The root manifest exists only to pin Biome; see package.json.
+        run: npm ci
+
+      - name: Lint
+        # Biome is a single native binary and analyses the whole repo at once, so
+        # one Linux leg is enough - there is no per-package or per-OS variation.
+        run: npm run lint
 
   version-consistency:
     name: Version consistency

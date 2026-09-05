@@ -216,6 +216,7 @@ runs correctly under the read-only token given to fork pull requests.
 - The engine and the adapter are now coupled at build time as well as at
   runtime, and the workflow encodes that coupling explicitly. Severing it
   requires the shared types to move into their own package.
-- CI covers typecheck, tests, and version consistency. It does not lint: no
-  linter is configured anywhere in the repository, and adding one is a separate
-  decision.
+- CI covers typecheck, tests, linting, and version consistency. Linting arrived
+  later, in ADR-042, as a single Linux `lint` job rather than a matrix leg:
+  Biome is a native binary that analyses the whole repository in one pass, so
+  there is no per-package or per-OS variation to cover.
