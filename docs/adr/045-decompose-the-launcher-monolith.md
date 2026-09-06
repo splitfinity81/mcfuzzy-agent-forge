@@ -22,7 +22,7 @@ Two properties made a naive split risky:
 
 ## Decision
 
-Split the file into eleven modules under `scripts/launcher/`, and **keep `launcher.ts`
+Split the file into twelve modules under `scripts/launcher/`, and **keep `launcher.ts`
 as a barrel** that re-exports the same public symbols.
 
 `state` stays a singleton and simply relocates to `launcher/state.ts`. A module-level
