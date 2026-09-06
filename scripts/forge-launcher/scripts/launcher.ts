@@ -1,210 +1,22 @@
 import fs from "node:fs";
-import { createRequire } from "node:module";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
-import { bootstrap, repositoryLogFile } from "./bootstrap.ts";
+import { bootstrap } from "./bootstrap.ts";
 import { upsertProject } from "./console/paths.ts";
-import { command, fail, header, info, link, ok, out, printLogTail, runCommand, runLogged, runWithHeartbeat, spawnDetached, step, warn } from "./format.ts";
+import { command, fail, header, info, link, ok, out, printLogTail, runCommand, runWithHeartbeat, spawnDetached, step, warn } from "./format.ts";
 import { detectRepoRoot, expandPath, resolveInputFile } from "./paths.ts";
 import { prompt, promptMultiline, promptPath, promptPathLoop, promptSelect, promptYesNo, prompts } from "./prompts.ts";
 import { launchCliInTerminal } from "./terminal.ts";
 import { loadEngineConfig, saveEngineConfig } from "./engine-config.ts";
 import { engineRunCli } from "./engine-run.ts";
 
-const nodeRequire = createRequire(import.meta.url);
+import { debugMode, engineDetachedCommand, envFlag, envFlagOrUndefined } from "./launcher/env.ts";
+import { findAdapterDir, findEngineDir, harnessAgentsDir, harnessRootDir, harnessSkillsDir, hasGeneratedTeam, hasPrd, skillPathFor } from "./launcher/harness-paths.ts";
+import { authoringEvent, runLogFile, runLoggedStep } from "./launcher/log.ts";
+import { defaultEngineHarness, type HarnessName, type LauncherOptions, state } from "./launcher/state.ts";
 
-/**
- * Entry point for re-invoking the CLI (detached engine start). Resolves to the
- * compiled `cli.js` when running from `dist/` and the TypeScript source when
- * running via tsx, so the detached child always starts.
- */
-const IS_SOURCE = import.meta.url.endsWith(".ts");
-const CLI_ENTRY = fileURLToPath(new URL(IS_SOURCE ? "./cli.ts" : "./cli.js", import.meta.url));
-
-/** Node preload args that bootstrap the tsx loader for a TypeScript CLI entry. */
-function cliNodePrefix(): string[] {
-  return IS_SOURCE ? ["--import", nodeRequire.resolve("tsx")] : [];
-}
-
-/** Builds the detached `forge-launcher engine-run` invocation for the given engine args. */
-export function engineDetachedCommand(engineArgs: string[]): { cmd: string; args: string[] } {
-  return { cmd: process.execPath, args: [...cliNodePrefix(), CLI_ENTRY, ...engineArgs] };
-}
-
-export interface LauncherOptions {
-  nonInteractive?: boolean;
-  headless?: boolean;
-  draft?: boolean;
-  dryRun?: boolean;
-}
-
-type HarnessName = "github" | "opencode" | "claude" | "agents";
-
-export function defaultEngineHarness(harness: HarnessName): string {
-  return harness === "github" ? "copilot" : "opencode";
-}
-
-interface LauncherState {
-  harness: HarnessName;
-  harnessLabel: string;
-  repoDir: string;
-  remoteCreated: boolean;
-  ghAvailable: boolean;
-  copilotAvailable: boolean;
-  opencodeAvailable: boolean;
-  claudeAvailable: boolean;
-  prdAdded: boolean;
-  researchAdded: boolean;
-  engineStarted: boolean;
-  engineConfig: {
-    harness: string;
-    granularity: string;
-    concurrency: string;
-    taskTimeoutMs: string;
-    maxRetries: string;
-    viz: boolean;
-    vizPort: string;
-    keepAlive: boolean;
-    attach: string;
-    autoCommit: boolean;
-    executionMode: "auto" | "manual";
-    selectionScope?: "single" | "range" | "list";
-    selectedTaskIds: string[];
-  };
-}
-
-const state: LauncherState = {
-  harness: "agents",
-  harnessLabel: "Generic .agents",
-  repoDir: "",
-  remoteCreated: false,
-  ghAvailable: false,
-  copilotAvailable: false,
-  opencodeAvailable: false,
-  claudeAvailable: false,
-  prdAdded: false,
-  researchAdded: false,
-  engineStarted: false,
-  engineConfig: {
-    harness: process.env.FORGE_ENGINE_HARNESS ?? "opencode",
-    granularity: process.env.FORGE_ENGINE_GRANULARITY ?? "",
-    concurrency: process.env.FORGE_ENGINE_CONCURRENCY ?? "",
-    taskTimeoutMs: process.env.FORGE_ENGINE_TASK_TIMEOUT_MS ?? "",
-    maxRetries: process.env.FORGE_ENGINE_MAX_RETRIES ?? "",
-    viz: envFlag("FORGE_ENGINE_VIZ"),
-    vizPort: process.env.FORGE_ENGINE_VIZ_PORT ?? "",
-    keepAlive: envFlag("FORGE_ENGINE_ATTACH"),
-    attach: process.env.FORGE_ENGINE_ATTACH_URL ?? "",
-    autoCommit: process.env.FORGE_ENGINE_AUTO_COMMIT !== "0",
-    executionMode: "auto",
-    selectionScope: undefined,
-    selectedTaskIds: [],
-  },
-};
-
-/** Single tee-log for all long-running step output during this launcher run. */
-function runLogFile(repoDir = state.repoDir): string {
-  return repositoryLogFile(repoDir);
-}
-
-/** Append a machine-readable authoring lifecycle record to the same stream as
- * process output. Consumers must ignore ordinary lines, preserving plain log
- * streaming for terminals and older Console clients. */
-function authoringEvent(type: string, data: Record<string, unknown> = {}): void {
-  const record = { type, timestamp: new Date().toISOString(), ...data };
-  fs.mkdirSync(path.dirname(runLogFile()), { recursive: true });
-  const encoded = `${JSON.stringify(record)}\n`;
-  // Keep the human/process log and its FORGE_EVENT compatibility prefix, while
-  // giving consumers a lossless structured stream that does not need log parsing.
-  fs.appendFileSync(runLogFile(), `FORGE_EVENT ${encoded}`, "utf8");
-  fs.appendFileSync(path.join(path.dirname(runLogFile()), "AUTHORING-EVENTS.jsonl"), encoded, "utf8");
-}
-
-function runLoggedStep(
-  label: string,
-  cmd: string,
-  args: string[],
-  opts: { cwd?: string; dryRun?: boolean; env?: NodeJS.ProcessEnv } = {},
-): Promise<number> {
-  const logFile = runLogFile();
-  return runWithHeartbeat(
-    label,
-    async () => {
-      const res = await runLogged(cmd, args, { cwd: opts.cwd, logFile, env: opts.env });
-      if (res.code !== 0) printLogTail(logFile);
-      return res.code;
-    },
-    { dryRun: opts.dryRun },
-  );
-}
-
-function envFlag(name: string): boolean {
-  return process.env[name] === "1";
-}
-
-/** Returns the env flag when the variable is set, else undefined (unset). */
-function envFlagOrUndefined(name: string): boolean | undefined {
-  return process.env[name] !== undefined ? process.env[name] === "1" : undefined;
-}
-
-function hasPrd(): boolean {
-  return (
-    state.prdAdded ||
-    fs.existsSync(path.join(state.repoDir, "docs", "PRD.md")) ||
-    fs.existsSync(path.join(state.repoDir, "docs", "product-vision.md"))
-  );
-}
-
-function harnessAgentsDir(): string {
-  return path.join(state.repoDir, harnessRootDir(), "agents");
-}
-
-function harnessSkillsDir(): string {
-  return path.join(state.repoDir, harnessRootDir(), "skills");
-}
-
-function harnessRootDir(): string {
-  switch (state.harness) {
-    case "github": return ".github";
-    case "claude": return ".claude";
-    case "opencode": return ".opencode";
-    default: return ".agents";
-  }
-}
-
-function skillPathFor(skillName: string): string {
-  return path.join(state.repoDir, harnessRootDir(), "skills", skillName, "SKILL.md");
-}
-
-/** Locates the bootstrapped forge-workflow-engine package dir (any harness root). */
-function findEngineDir(repoDir: string): string | null {
-  for (const root of [".agents", ".opencode", ".claude", ".github"]) {
-    const candidate = path.join(repoDir, root, "skills", "forge-workflow-engine");
-    if (fs.existsSync(candidate)) return candidate;
-  }
-  return null;
-}
-
-function findAdapterDir(repoDir: string): string | null {
-  for (const root of [".agents", ".opencode", ".claude", ".github"]) {
-    const candidate = path.join(repoDir, root, "skills", "forge-execution-adapter");
-    if (fs.existsSync(candidate)) return candidate;
-  }
-  return null;
-}
-
-function debugMode(): boolean {
-  return process.env.FORGE_LAUNCHER_DEBUG === "1";
-}
-
-function hasGeneratedTeam(): boolean {
-  const agentsDir = harnessAgentsDir();
-  if (!fs.existsSync(agentsDir)) return false;
-  const excluded = new Set(["forge-team-builder.md", "project-orchestrator.md", "workflow-orchestrator.md"]);
-  return fs
-    .readdirSync(agentsDir)
-    .filter((f) => f.endsWith(".md") && !excluded.has(f)).length > 0;
-}
+// Public API preserved for cli.ts, console/control.ts and the test suite.
+export { engineDetachedCommand } from "./launcher/env.ts";
+export { defaultEngineHarness, type LauncherOptions } from "./launcher/state.ts";
 
 const FORGE_TEMPLATE_AGENTS = new Set(["forge-team-builder.md", "project-orchestrator.md", "workflow-orchestrator.md"]);
 
