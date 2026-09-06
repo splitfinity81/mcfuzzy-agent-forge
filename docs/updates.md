@@ -4,6 +4,15 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## September 2026 - v3.52
+
+### The duplicate ADR-028 is resolved
+
+- Two ADRs were committed 55 minutes apart on 2026-08-27 and both claimed the number 028, so the log had 44 files but only 43 distinct numbers. `028-launcher-entry-resume-and-auto-build-demotion.md` was the second of the two and is now [ADR-044](adr/044-launcher-entry-resume-and-auto-build-demotion.md). The other keeps 028 because ADR-030 cites that number five times in the OpenCode sense, and ADRs are a historical record rather than something to rewrite after the fact.
+- The renumbered file carries an `**Originally filed as:** ADR-028` line explaining the move. Its `**Date:**` is unchanged and remains the real chronology - the number is only an identifier, which is why a August decision can sit at 044 without misrepresenting anything. Renumbering everything after 028 was rejected: it would have invalidated dozens of cross-references to fix one collision.
+
+---
+
 ## September 2026 - v3.51
 
 ### The launcher test suite stopped installing the world
@@ -739,7 +748,8 @@ the autonomous engine (`@workflow-orchestrator` / `forge-launcher engine-run`).*
   conditional-queue coverage in `launcher.test.ts`; `format.test.ts` covers the
   OSC 8 `hyperlink` helper. Launcher suite green.
 
-- [ADR-028](adr/028-launcher-entry-resume-and-auto-build-demotion.md): entry-point
+- [ADR-044](adr/044-launcher-entry-resume-and-auto-build-demotion.md) (filed at the
+  time as ADR-028, renumbered later to resolve a collision): entry-point
   consolidation, `forge-launcher resume`, and the `forge-auto-build` demotion.
 
 ---

@@ -1,7 +1,8 @@
-# ADR-028: Launcher as the Single Entry Point - `resume`, Review Links, and `forge-auto-build` Demotion
+# ADR-044: Launcher as the Single Entry Point - `resume`, Review Links, and `forge-auto-build` Demotion
 
 **Date:** 2026-08-27
 **Status:** Accepted
+**Originally filed as:** ADR-028. Renumbered to 044 to resolve a numbering collision: two ADRs were committed 55 minutes apart on 2026-08-27 and both claimed 028. This one was second, and ADR-030 cites 028 in the other sense, so this file moved. The `**Date:**` above is the real chronology - the number is only an identifier.
 **Relates to:** ADR-009 (`forge-auto-build` meta-skill, now superseded as an entry point), ADR-010/023 (forge-launcher), ADR-014 (workflow engine), ADR-018 (PRD as a deliberate prerequisite)
 
 ---
