@@ -30,11 +30,16 @@ function tmpDir(): string {
 }
 
 function runCli(args: string[], env: Record<string, string>): Promise<{ code: number; out: string }> {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
     execFile(
       "node",
       ["--import", "tsx", CLI, ...args],
-      { env: { ...process.env, ...GIT_ENV, ...env } },
+      // FORGE_SKIP_INSTALL keeps bootstrap from running a real `npm install` for
+      // every skill that declares dependencies: that costs ~20s per invocation
+      // and needs network access, which would make these tests slow and flaky.
+      // It is listed before ...env so a test can opt back in with "0"; the test
+      // named below deliberately does, so the install path stays covered.
+      { env: { ...process.env, ...GIT_ENV, FORGE_SKIP_INSTALL: "1", ...env } },
       (err, stdout, stderr) => {
         if (err) {
           resolve({ code: (err as { code?: number }).code ?? 1, out: stdout + stderr });

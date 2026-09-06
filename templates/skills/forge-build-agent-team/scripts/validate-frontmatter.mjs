@@ -79,7 +79,7 @@ function frontmatterBlock(text) {
   return lines.slice(1, 1 + end);
 }
 
-function problemsIn(file, text) {
+function problemsIn(_file, text) {
   const block = frontmatterBlock(text);
   if (block === null) {
     return ["missing or unterminated `---` frontmatter block"];

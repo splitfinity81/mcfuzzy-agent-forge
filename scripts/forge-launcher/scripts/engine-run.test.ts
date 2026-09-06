@@ -17,7 +17,7 @@ function tmpRepo(): string {
 }
 
 function runCli(args: string[], env: Record<string, string> = {}): Promise<{ code: number; out: string }> {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
     execFile("node", ["--import", "tsx", CLI, ...args], { env: { ...process.env, ...env } }, (err, stdout, stderr) => {
       if (err) {
         resolve({ code: (err as { code?: number }).code ?? 1, out: stdout + stderr });

@@ -254,4 +254,5 @@ html, body {
   100% { opacity: 0; }
 }
 
+/* biome-ignore lint/complexity/noImportantStyles: `.hidden` is a utility class that must override any component rule that sets `display`, so `!important` is load-bearing here. */
 .hidden { display: none !important; }

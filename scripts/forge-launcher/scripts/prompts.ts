@@ -76,7 +76,9 @@ async function readlineSelect(
   def: string,
 ): Promise<string> {
   process.stdout.write(message + "\n");
-  options.forEach((o, i) => process.stdout.write(`    ${i + 1}) ${o.label}\n`));
+  options.forEach((o, i) => {
+    process.stdout.write(`    ${i + 1}) ${o.label}\n`);
+  });
   const defIdx = options.findIndex((o) => o.value === def);
   const display = `Select [1-${options.length}] [${defIdx + 1}]: `;
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });

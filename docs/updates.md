@@ -4,6 +4,73 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## September 2026 - v3.52
+
+### The duplicate ADR-028 is resolved
+
+- Two ADRs were committed 55 minutes apart on 2026-08-27 and both claimed the number 028, so the log had 44 files but only 43 distinct numbers. `028-launcher-entry-resume-and-auto-build-demotion.md` was the second of the two and is now [ADR-044](adr/044-launcher-entry-resume-and-auto-build-demotion.md). The other keeps 028 because ADR-030 cites that number five times in the OpenCode sense, and ADRs are a historical record rather than something to rewrite after the fact.
+- The renumbered file carries an `**Originally filed as:** ADR-028` line explaining the move. Its `**Date:**` is unchanged and remains the real chronology - the number is only an identifier, which is why a August decision can sit at 044 without misrepresenting anything. Renumbering everything after 028 was rejected: it would have invalidated dozens of cross-references to fix one collision.
+
+---
+
+## September 2026 - v3.51
+
+### The launcher test suite stopped installing the world
+
+- The `scripts/forge-launcher` CI job took **7.9 minutes on Windows** against 0.8 minutes on Linux, and the full suite took **435.7 seconds** locally. The cause was `npm install` running against the live registry roughly 60 times per run: 12 tests drive the full non-interactive launcher, each one bootstraps a repo, and bootstrap installs the dependencies of all four skills that declare them (ADR-039). Measured directly, bootstrap costs 0.5 s with installation skipped and 20.3 s without.
+- `bootstrap` now honours `FORGE_SKIP_INSTALL=1` in addition to the existing `--no-install` flag, and the launcher suite sets it. An environment variable rather than a flag because the interactive launcher reaches bootstrap indirectly and takes no such flag; `FORGE_SKIP_INSTALL` joins the 27 `FORGE_*` variables the launcher already reads. The log records which opt-out applied, so `Skipped (FORGE_SKIP_INSTALL)` and `Skipped (--no-install)` are distinguishable after the fact.
+- Result: `launcher.test.ts` went from **316.4 s to 52.8 s**, and the full suite from **435.7 s to 78.3 s**, with 109 tests passing instead of 107. The suite also no longer needs network access to pass, which removes a whole class of flakiness that had nothing to do with what the tests assert.
+- Coverage went up, not down. The install path was previously executed 12 times and asserted **zero** times. It is now covered by a dedicated test in `bootstrap.test.ts` that asserts the outcome each skill actually reported, tolerating the non-fatal failure that ADR-039 specifies rather than assuming success.
+
+### Two findings worth recording
+
+- Three plausible explanations were measured and rejected before the real cause was found: the bootstrap tests already skipped installation, `npm audit`/funding round-trips were worth only 0.6 s, and test-file contention was worth ~25% rather than the bulk. Timing each test file in isolation was what localised it - `launcher.test.ts` was 316 s of a 351 s total, and every other file combined was 34 s.
+- Test-file concurrency was left at the default. Capping it at 2 measured 327 s against 436 s, but that contention was created by the installs; with them gone, pinning a value that depends on the runner's core count is not worth it.
+
+See [ADR-043](adr/043-launcher-tests-skip-dependency-installation.md).
+
+---
+
+## September 2026 - v3.50
+
+### Linting, with the noise turned off rather than tolerated
+
+- Added Biome at the repository root and wired a `lint` job into CI. Biome was chosen over ESLint because it is a single native binary with no plugin graph, it lints TypeScript, plain JavaScript, and CSS out of one config, and it runs over all 127 tracked files in about 0.2 seconds - fast enough that a green lint is a precondition for committing rather than a chore.
+- Linting is repo-wide, not per-package. That required a root `package.json`, which this repo had never had. It is tooling-only and deliberately omits a `packageManager` field: `actions/setup-node` v5+ auto-enables npm caching when it sees one and then fails looking for a root lockfile layout that does not exist here, which would break every leg of the test matrix. Both the manifest and the workflow carry comments saying so.
+- The formatter is configured but disabled. Turning it on would rewrite most of the repository in a single commit and bury the substantive changes, so it is left as a separate, deliberate decision.
+- The first run reported 8952 diagnostics. 8619 of them - 96% - came from one vendored file, `pixi.min.js`, which is third-party and minified. Excluding vendored code left 333 real findings.
+- Of those 333, 274 came from three purely cosmetic rules: `useLiteralKeys`, `noNonNullAssertion`, and `useTemplate`. They were disabled rather than fixed. A rule that produces 82% of the noise and has never caught a defect is a rule that trains people to ignore the linter.
+- The remaining 59 were fixed: unused imports, variables, parameters and dead functions removed; assignments hoisted out of `while` conditions; implicit `any` on `let` annotated; `forEach` callbacks with implicit returns given braces; redundant `&& x.length` guards replaced with optional chaining. Two CSS findings were handled on their merits - a descending-specificity rule was reordered (a no-op, since the more specific rule wins regardless of source order), and a `!important` on a `.hidden` utility class was suppressed with a reason, because there it is load-bearing.
+- All six packages still typecheck and test clean afterwards: 243 tests passing, zero failures.
+
+### Two findings worth recording
+
+- **Biome's unsafe autofix is not safe.** `biome lint --write --unsafe` took the count from 333 to 92, but it touched 49 files, rewrote non-null assertions `a!.b` into optional chains `a?.b` - a real change in runtime behaviour, not a cleanup - and introduced three brand-new diagnostics of its own. Only the plain `--write` autofix is used, and `lint:fix` is documented accordingly.
+- **`noRedundantUseStrict` misfired on a classic script.** The safe autofix deleted `"use strict";` from the visualiser dashboard's `app.js`. The rule assumes ES-module context, where strict mode is implicit - but `index.html` loads that file with a plain `<script src>`, no `type="module"`, so the directive is load-bearing and removing it silently changes the semantics of the whole file. Restored, with an inline suppression explaining why. The launcher's own dashboard is genuinely a module and is unaffected, which is precisely why the two had to be checked separately rather than assumed symmetrical.
+
+---
+
+## September 2026 - v3.49
+
+### Removed an unfixable advisory by removing the dependency
+
+- `skill-review` reported one moderate advisory against `qs@6.15.3`, reached through `azure-devops-node-api` -> `typed-rest-client`. `npm audit fix` reported a fix was available but changed nothing, and the reason is that the fix does not exist: both advisories name `qs@6.16.0` as the fixed version, and the highest published 6.x release is `6.15.3`. Upgrading the SDK is worse rather than better - `azure-devops-node-api@17` depends on `typed-rest-client@3.1.0`, which pins `qs` to `6.15.3` exactly, replacing a permissive range with a hard pin on the vulnerable version.
+- The dependency was never used. An exhaustive search for the package name and its API surface across the whole repository returned exactly one hit: the declaration in `package.json`. `scripts/providers/ado.ts` does talk to Azure DevOps, but over the REST API with the global `fetch` and hand-built authorization headers; it imports nothing from the SDK.
+- Removed it. `skill-review` goes from 1 moderate advisory to 0 and from 90 dependencies to 67, with typecheck and tests unchanged at exit 0. ADR-041 records the rule this establishes: when an advisory has no published fix, check whether the dependency is needed at all before reaching for an upgrade.
+
+### Dependency updates, code owners, and a pull request template
+
+- Added `.github/dependabot.yml`. There is no root `package.json`, so each package needs its own entry; updates are grouped per package so a routine bump arrives as one pull request instead of a dozen. `forge-build-agent-team` is deliberately absent because it declares no dependencies and ships no lockfile. GitHub Actions versions are tracked on the same weekly schedule.
+- Added `.github/CODEOWNERS` and `.github/pull_request_template.md`. The template's checklist encodes the conventions in `AGENTS.md` that `npm run check:version` cannot catch on its own: the changelog entry, the README version bump, the ADR, and the per-package verification commands. ADR-040 recorded the absence of both files as part of the original gap; this closes it.
+
+### Pinned the workflow actions to v7
+
+- `actions/checkout` and `actions/setup-node` moved from v4 to v7, clearing the Node 20 deprecation warnings on all thirteen jobs.
+- Three majors of breaking changes were reviewed and none apply. `checkout@v7` blocks fork checkout under `pull_request_target` and `workflow_run`; this workflow uses plain `pull_request`. `setup-node@v5` began enabling caching automatically when `package.json` declares a `packageManager` field, and v6 narrowed that to npm - neither matters here because no manifest declares `packageManager` and there is no root `package.json` at all.
+- That last point is a latent trap rather than a current bug, so it is now recorded as a comment in the workflow beside the `setup-node` step: adding a root `package.json` with a `packageManager` field would switch caching on, send the action looking for a root lockfile that does not exist, and fail every leg. The lockfiles live in the six package directories.
+
+---
+
 ## September 2026 - v3.48
 
 ### Cross-package typecheck in CI
@@ -681,7 +748,8 @@ the autonomous engine (`@workflow-orchestrator` / `forge-launcher engine-run`).*
   conditional-queue coverage in `launcher.test.ts`; `format.test.ts` covers the
   OSC 8 `hyperlink` helper. Launcher suite green.
 
-- [ADR-028](adr/028-launcher-entry-resume-and-auto-build-demotion.md): entry-point
+- [ADR-044](adr/044-launcher-entry-resume-and-auto-build-demotion.md) (filed at the
+  time as ADR-028, renumbered later to resolve a collision): entry-point
   consolidation, `forge-launcher resume`, and the `forge-auto-build` demotion.
 
 ---

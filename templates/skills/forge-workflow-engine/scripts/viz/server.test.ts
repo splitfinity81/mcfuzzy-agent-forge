@@ -104,8 +104,8 @@ function collectSse(url: string): SseCollector {
     let eventType = "message";
     res.on("data", (chunk: Buffer) => {
       buffer += chunk.toString("utf8");
-      let idx;
-      while ((idx = buffer.indexOf("\n\n")) >= 0) {
+      let idx = buffer.indexOf("\n\n");
+      while (idx >= 0) {
         const block = buffer.slice(0, idx);
         buffer = buffer.slice(idx + 2);
         let data = "";
@@ -115,6 +115,7 @@ function collectSse(url: string): SseCollector {
         }
         if (data) events.push({ type: eventType, data: JSON.parse(data) });
         eventType = "message";
+        idx = buffer.indexOf("\n\n");
       }
     });
   });

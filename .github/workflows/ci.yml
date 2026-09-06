@@ -43,14 +43,21 @@ jobs:
         shell: bash
         working-directory: ${{ matrix.package }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           # Node 22 is required, not just preferred: on Windows npm runs scripts
           # through cmd.exe, which does not expand globs, so the test patterns
           # reach Node unexpanded and rely on its built-in glob support (Node 21+).
           node-version: '22'
+          # Dependency caching stays off. setup-node v5+ turns npm caching on
+          # automatically when the repo-root package.json declares a
+          # "packageManager" field, then fails the job if no lockfile is found to
+          # key on. The root package.json is tooling-only (Biome) and deliberately
+          # omits "packageManager" for exactly this reason - adding it would break
+          # every leg of this matrix, because the lockfiles these jobs install
+          # from live in the per-package directories, not at the root.
 
       - name: Install dependencies
         # forge-build-agent-team declares no dependencies and ships no lockfile,
@@ -76,6 +83,26 @@ jobs:
       - name: Test
         run: npm test
 
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+
+      - name: Install tooling
+        # The root manifest exists only to pin Biome; see package.json.
+        run: npm ci
+
+      - name: Lint
+        # Biome is a single native binary and analyses the whole repo at once, so
+        # one Linux leg is enough - there is no per-package or per-OS variation.
+        run: npm run lint
+
   version-consistency:
     name: Version consistency
     runs-on: ubuntu-latest
@@ -84,9 +111,9 @@ jobs:
       run:
         working-directory: scripts/forge-launcher
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: '22'
 

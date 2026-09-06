@@ -164,11 +164,6 @@ function producesFor(taskId: string): string {
   return `work.${taskId.toLowerCase()}`;
 }
 
-interface BulletLine {
-  indent: number;
-  text: string;
-}
-
 interface BulletGroup {
   /** Top-level bullet text; treated as a container when it has children. */
   header?: string;

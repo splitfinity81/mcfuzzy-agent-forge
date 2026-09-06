@@ -424,7 +424,7 @@ export async function startConsoleServer(options: ConsoleServerOptions = {}): Pr
           if (!currentRepo) return sendJson(res, 400, { ok: false, message: "no repo selected" });
           const p = currentPaths()!;
           const taskId = typeof body.taskId === "string" && body.taskId.length > 0 ? body.taskId : undefined;
-          let result;
+          let result: ReturnType<typeof repo.setTaskTimeout>;
           if (taskId) {
             result = repo.setTaskTimeout(p, taskId, timeoutMs);
           } else {

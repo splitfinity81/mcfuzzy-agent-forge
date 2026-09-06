@@ -87,7 +87,7 @@ export async function renderOverview(container: HTMLElement): Promise<void> {
   ]);
 }
 
-function renderFeatureIncrement(container: HTMLElement): HTMLElement {
+function renderFeatureIncrement(_container: HTMLElement): HTMLElement {
   const input = el("textarea", { rows: "3", placeholder: "Describe the feature to add…" });
   const run = el("input", { type: "checkbox" }) as HTMLInputElement;
   const button = el("button", { className: "btn btn-primary" }, "Run Feature Increment");
@@ -100,7 +100,7 @@ function renderFeatureIncrement(container: HTMLElement): HTMLElement {
   return el("div", { className: "panel" }, [el("h4", null, "Increment the project"), el("p", { className: "dim small" }, "Authors the feature, updates affected agents, recompiles the manifest, and optionally runs it."), input, el("label", { className: "checkbox" }, [run, " Run the workflow after preparing"]), el("div", { className: "actions" }, [button])]);
 }
 
-function renderFeaturePrd(container: HTMLElement): HTMLElement {
+function renderFeaturePrd(_container: HTMLElement): HTMLElement {
   const input = el("textarea", { rows: "3", placeholder: "Describe the feature to add…" });
   const button = el("button", { className: "btn btn-primary" }, "Author Feature PRD");
   button.addEventListener("click", () => {
@@ -277,7 +277,7 @@ function startPoll(container: HTMLElement): void {
     void api.summary()
       .then((s) => {
         if (!s) return;
-        if (!s.job || s.job.status !== "running") {
+        if (s.job?.status !== "running") {
           stopPoll();
         }
       })

@@ -28,7 +28,7 @@ export function parseProgress(path: string, manifest: ExecutionManifest): Progre
 
   const markdown = readFileSync(path, "utf8");
   const completed: CompletedTaskRecord[] = [];
-  const completedPattern = /- \[x\] Phase ([^,]+), Task ([^:]+): (.+?)(?: \(@([^\)]+)\))?(?:\s*\n\s*- Files: (.+))?/g;
+  const completedPattern = /- \[x\] Phase ([^,]+), Task ([^:]+): (.+?)(?: \(@([^)]+)\))?(?:\s*\n\s*- Files: (.+))?/g;
   for (const match of markdown.matchAll(completedPattern)) {
     completed.push({
       taskId: match[2]!.trim(),
