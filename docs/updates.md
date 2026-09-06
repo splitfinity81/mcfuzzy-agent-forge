@@ -4,6 +4,17 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## September 2026 - v3.53
+
+### The launcher monolith is decomposed
+
+- `scripts/forge-launcher/scripts/launcher.ts` was **2173 lines** holding 95 top-level declarations: the nine bootstrap steps, the resume path, the `run*` commands `cli.ts` calls, engine control, plan drafting, skill invocation, path helpers and logging. It is now **113 lines** - a public API barrel plus `completionSummary` and `runLauncher` - with the rest split across twelve focused modules under `scripts/launcher/`. See [ADR-045](adr/045-decompose-the-launcher-monolith.md).
+- `cli.ts`, `console/control.ts` and `launcher.test.ts` were **never edited**. Keeping `launcher.ts` as a barrel that re-exports the same symbols meant every tranche could be verified against an unmodified 109-test suite, which is the only evidence the refactor preserved behaviour.
+- The `state` singleton simply relocated to `launcher/state.ts` rather than being threaded through parameters. A module-level `const` object is shared by reference, so all 222 references kept working untouched.
+- One real cycle appeared between the resume and command clusters and was broken by moving symbols, not merging modules: the shared repo and engine-state readers were hoisted into `launcher/repo-state.ts`, and `openCliFor` moved upstream into `launcher/engine.ts`. Total lines rose from 2173 to 2285, the cost of explicit import headers - dependencies are now stated per module instead of being implicit in one shared scope.
+
+---
+
 ## September 2026 - v3.52
 
 ### The duplicate ADR-028 is resolved
