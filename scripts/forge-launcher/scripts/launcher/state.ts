@@ -25,6 +25,7 @@ export interface LauncherState {
   prdAdded: boolean;
   researchAdded: boolean;
   engineStarted: boolean;
+  stopped: boolean;
   engineConfig: {
     harness: string;
     granularity: string;
@@ -59,6 +60,7 @@ export const state: LauncherState = {
   prdAdded: false,
   researchAdded: false,
   engineStarted: false,
+  stopped: false,
   engineConfig: {
     harness: process.env.FORGE_ENGINE_HARNESS ?? "opencode",
     granularity: process.env.FORGE_ENGINE_GRANULARITY ?? "",

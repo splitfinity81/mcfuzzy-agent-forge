@@ -2,15 +2,15 @@ import fs from "node:fs";
 import path from "node:path";
 import { bootstrap } from "./bootstrap.ts";
 import { upsertProject } from "./console/paths.ts";
-import { command, fail, header, info, link, ok, out, printLogTail, runCommand, runWithHeartbeat, spawnDetached, step, warn } from "./format.ts";
+import { command, fail, header, info, link, ok, out, runCommand, runWithHeartbeat, step, warn } from "./format.ts";
 import { detectRepoRoot, expandPath, resolveInputFile } from "./paths.ts";
 import { prompt, promptMultiline, promptPath, promptPathLoop, promptSelect, promptYesNo, prompts } from "./prompts.ts";
 import { launchCliInTerminal } from "./terminal.ts";
 import { loadEngineConfig, saveEngineConfig } from "./engine-config.ts";
 import { engineRunCli } from "./engine-run.ts";
 
-import { engineDetachedCommand, envFlag, envFlagOrUndefined } from "./launcher/env.ts";
-import { findAdapterDir, findEngineDir, harnessAgentsDir, harnessRootDir, harnessSkillsDir, hasGeneratedTeam, hasPrd, skillPathFor } from "./launcher/harness-paths.ts";
+import { envFlagOrUndefined } from "./launcher/env.ts";
+import { findAdapterDir, harnessAgentsDir, harnessRootDir, harnessSkillsDir, hasGeneratedTeam, hasPrd } from "./launcher/harness-paths.ts";
 import { authoringEvent, runLogFile, runLoggedStep } from "./launcher/log.ts";
 import { defaultEngineHarness, type HarnessName, type LauncherOptions, state } from "./launcher/state.ts";
 
@@ -25,448 +25,10 @@ export { compareFeatureIncrementFiles, snapshotFeatureIncrementFiles } from "./l
 export type { FeatureIncrementFileChanges, FeatureIncrementSnapshot } from "./launcher/feature-increment.ts";
 export { buildTeamPrompt, headlessSkillMsg } from "./launcher/skills.ts";
 
-// --- auto-draft flow -------------------------------------------------------
+import { diagnoseAutoDraftFail, draftCommit, pauseForResume } from "./launcher/plan.ts";
 
-async function draftCommit(message: string): Promise<void> {
-  await runCommand("git", ["-C", state.repoDir, "add", "."]);
-  const diff = await runCommand("git", ["-C", state.repoDir, "diff", "--cached", "--quiet", "--", "."], { capture: true });
-  if (diff.code === 0) {
-    warn("No changes to commit after auto-draft.");
-    return;
-  }
-  await runCommand("git", ["-C", state.repoDir, "commit", "-m", message]);
-  ok(`Committed: '${message}'`);
-}
 
-// --- stop-here-and-resume-later checkpoints ---------------------------------
-
-/** Set when the user chooses "stop here and resume later" at a checkpoint. */
-let stopped = false;
-
-/**
- * Interactive "stop here and resume later" checkpoint. When the user chooses to
- * stop, prints the resume command so the run can be picked up later with
- * `forge-launcher resume`. No-op in non-interactive / dry-run mode.
- */
-async function pauseForResume(opts: LauncherOptions, stage: string): Promise<void> {
-  if (opts.nonInteractive || opts.dryRun) return;
-  const answer = await promptYesNo(`Stop here and resume later (after ${stage})?`, "n");
-  if (answer !== "y") return;
-  stopped = true;
-  out("");
-  info("Stopped. Resume later from anywhere with:");
-  command(`forge-launcher resume --repo "${state.repoDir}"`);
-  out("");
-}
-
-// --- post-team plan & validate step (playbook 5a) ----------------------------
-
-/** True when the repo uses the decomposed vision + features layout. */
-function hasDecomposedLayout(): boolean {
-  return (
-    fs.existsSync(path.join(state.repoDir, "docs", "product-vision.md")) &&
-    fs.existsSync(path.join(state.repoDir, "docs", "features")) &&
-    fs.readdirSync(path.join(state.repoDir, "docs", "features")).some((f) => f.endsWith(".md"))
-  );
-}
-
-const PLAN_MONOLITHIC_MSG =
-  "Analyze docs/PRD.md and produce an execution plan only. Do not implement anything yet. " +
-  "List each phase, the agents involved, their tasks, and the dependencies between phases. " +
-  "Save the plan to docs/PROGRESS.md. Headless mode: auto-proceed and stop after saving the plan.";
-
-const PLAN_FEATURES_MSG =
-  "Analyze docs/product-vision.md and all feature documents in docs/features/. " +
-  "Build a feature dependency graph and produce an execution plan showing which features will be " +
-  "built in which order and why. Save the plan to docs/PROGRESS.md. Do not implement anything yet. " +
-  "Headless mode: auto-proceed and stop after saving the plan.";
-
-/** Offers to open the harness CLI to run project-orchestrator's plan step manually. */
-async function offerPlanManualRun(opts: LauncherOptions): Promise<void> {
-  const manual = "Run it manually in the harness: @project-orchestrator Analyze docs/PRD.md and produce an execution plan only. Save the plan to docs/PROGRESS.md.";
-  if (opts.nonInteractive) {
-    out(`    ${manual}`);
-    return;
-  }
-  const answer = await promptYesNo("Open the harness CLI to run project-orchestrator manually?", "n");
-  if (answer === "n") {
-    info("To run it manually:");
-    out(`    cd "${state.repoDir}"`);
-    out(`    ${manual}`);
-    return;
-  }
-  const cli = state.harness === "github" ? "copilot" : state.harness === "claude" ? "claude" : "opencode";
-  const launched = await launchCliInTerminal(cli, state.repoDir, state.harness === "github" ? [] : ["."]);
-  if (launched) ok(`${cli} launched. Run @project-orchestrator in the session.`);
-  else {
-    warn(`${cli} did not open automatically. Run:`);
-    out(`    cd "${state.repoDir}" && ${cli} .`);
-  }
-}
-
-/**
- * Post-team "plan & validate" step (prompt-playbook 5a). Runs project-orchestrator
- * through the forge-orchestrate-build skill headlessly to produce the execution
- * plan in docs/PROGRESS.md, commits it, and stops for review before the build.
- * Falls back to the manual @project-orchestrator command when the headless run
- * fails or produces no plan document.
- */
-async function planAndValidateStep(opts: LauncherOptions): Promise<void> {
-  const skill = "forge-orchestrate-build";
-  const planMsg = hasDecomposedLayout() ? PLAN_FEATURES_MSG : PLAN_MONOLITHIC_MSG;
-
-  if (opts.nonInteractive) {
-    if (!envFlag("FORGE_AUTO_DRAFT")) return;
-  } else {
-    const def = opts.draft ? "y" : "n";
-    const answer = await promptYesNo(
-      "Generate the execution plan now (project-orchestrator, headless; saved to docs/PROGRESS.md)?",
-      def,
-    );
-    if (answer === "n") return;
-  }
-
-  out("");
-  info("Generating the execution plan via project-orchestrator (headless) …");
-  const ran = await runSkillHeadless(`/${skill} ${planMsg}`, opts);
-  if (!ran) {
-    await offerPlanManualRun(opts);
-    return;
-  }
-  await draftCommit("docs: add execution plan");
-
-  if (fs.existsSync(path.join(state.repoDir, "docs", "PROGRESS.md"))) {
-    ok("Execution plan saved to docs/PROGRESS.md.");
-    out("");
-    out("  Review the plan before building:");
-    out(`    - ${link(path.join(state.repoDir, "docs", "PROGRESS.md"))}`);
-    await pauseForResume(opts, "execution plan drafted");
-  } else {
-    warn("No execution plan document detected after the run.");
-    await offerPlanManualRun(opts);
-  }
-}
-
-/** Prints diagnostics when an auto-draft stage finishes without its artifact. */
-async function diagnoseAutoDraftFail(skillName: string): Promise<void> {
-  warn(`The auto-draft did not produce the expected artifact for '${skillName}'.`);
-  out("");
-  printLogTail(runLogFile(), 30);
-  out("");
-  info("What the repo contains right now:");
-  const st = await runCommand("git", ["-C", state.repoDir, "status", "--short"], { capture: true });
-  if (st.code === 0 && st.stdout.trim()) {
-    out("  " + st.stdout.trim().replace(/\n/g, "\n  "));
-  } else {
-    out("  (no changes)");
-  }
-  const skillPath = skillPathFor(skillName);
-  out("");
-  if (fs.existsSync(skillPath)) {
-    info(`Skill present: ${skillPath}`);
-  } else {
-    warn(`Skill NOT found: ${skillPath}`);
-  }
-}
-
-/** Offers to run the failed skill interactively (or prints the command). */
-async function offerManualRun(skillName: string, opts: LauncherOptions): Promise<void> {
-  if (opts.nonInteractive) {
-    out(`    Run it manually in the repo: /${skillName} Use docs/IDEA.md as the project idea`);
-    return;
-  }
-  const answer = await promptYesNo(`Open the harness CLI now to run /${skillName} manually?`, "n");
-  if (answer === "n") {
-    info("To run it manually:");
-    out(`    cd "${state.repoDir}"`);
-    out(`    Then run: /${skillName} Use docs/IDEA.md as the project idea`);
-    return;
-  }
-  const cli = state.harness === "github" ? "copilot" : state.harness === "claude" ? "claude" : "opencode";
-  const launched = await launchCliInTerminal(cli, state.repoDir, state.harness === "github" ? [] : ["."]);
-  if (launched) ok(`${cli} launched. Run /${skillName} in the session.`);
-  else {
-    warn(`${cli} did not open automatically. Run:`);
-    out(`    cd "${state.repoDir}" && ${cli} .`);
-  }
-}
-
-async function autoDraftPrd(opts: LauncherOptions): Promise<void> {
-  if (hasPrd()) return;
-  if (opts.nonInteractive) {
-    if (!envFlag("FORGE_AUTO_DRAFT")) return;
-  } else {
-    const def = opts.draft ? "y" : "n";
-    const answer = await promptYesNo(
-      "Generate the PRD from docs/IDEA.md automatically now (headless, auto-proceed with best answers)?",
-      def,
-    );
-    if (answer === "n") return;
-  }
-
-  out("");
-  info("Auto-drafting the PRD from docs/IDEA.md (headless) …");
-  const skill = "forge-auto-build-prd";
-  const ran = await runSkillHeadless(
-    `/${skill} ${PRD_HEADLESS_MSG}`,
-    opts,
-  );
-  if (!ran) return;
-  await draftCommit("docs: add auto-drafted PRD");
-
-  if (hasPrd()) {
-    state.prdAdded = true;
-    ok("PRD generated.");
-    out("");
-    out("  Review it before continuing:");
-    out(`    - ${link(path.join(state.repoDir, "docs", "PRD.md"))}`);
-    if (fs.existsSync(path.join(state.repoDir, "docs", "product-vision.md"))) {
-      out("    - " + link(path.join(state.repoDir, "docs", "product-vision.md")) + " (decomposed) + docs/features/*.md");
-    } else {
-      out("    - docs/PRD.md is monolithic (no decomposition)");
-    }
-    await pauseForResume(opts, "PRD drafted");
-  } else {
-    await diagnoseAutoDraftFail(skill);
-    await offerManualRun(skill, opts);
-  }
-}
-
-function engineRunArgs(): string[] {
-  const args = ["engine-run", "--repo", state.repoDir];
-  const cfg = state.engineConfig;
-  if (cfg.harness) args.push("--harness", cfg.harness);
-  if (cfg.granularity) args.push("--granularity", cfg.granularity);
-  if (cfg.concurrency) args.push("--concurrency", cfg.concurrency);
-  if (cfg.taskTimeoutMs) args.push("--task-timeout-ms", cfg.taskTimeoutMs);
-  if (cfg.maxRetries) args.push("--max-retries", cfg.maxRetries);
-  if (cfg.viz) {
-    args.push("--viz");
-    if (cfg.vizPort) args.push("--viz-port", cfg.vizPort);
-  }
-  if (cfg.keepAlive) args.push("--keep-alive");
-  if (cfg.attach) args.push("--attach", cfg.attach);
-  if (cfg.autoCommit === false) args.push("--no-auto-commit");
-  if (cfg.executionMode === "manual") {
-    args.push("--execution-mode", "manual");
-    if (cfg.selectionScope) args.push("--selection-scope", cfg.selectionScope);
-    if (cfg.selectedTaskIds.length > 0) args.push("--selected-tasks", cfg.selectedTaskIds.join(","));
-  }
-  args.push("--yes");
-  return args;
-}
-
-function printEngineCommand(): void {
-  command(`npx forge-launcher ${engineRunArgs().join(" ")}`);
-  out("");
-  info("Run it from anywhere later to execute the build through the workflow engine.");
-}
-
-/** Coerce a numeric prompt to a positive integer, falling back on garbage/empty. */
-function cleanPositiveInt(value: string, fallback: string): string {
-  const n = Number(value);
-  return Number.isInteger(n) && n > 0 ? String(n) : fallback;
-}
-
-/**
- * Interactive engine configuration (task granularity, parallelism, timeout,
- * retries, harness). Always shown after choosing run/print; Esc/Ctrl+C keeps
- * the current defaults. Non-interactive runs use env vars only.
- */
-async function configureEngineOptions(opts: LauncherOptions): Promise<void> {
-  if (opts.nonInteractive) return;
-  out("");
-  step("Configure the workflow engine");
-  info("Press Enter to accept the default for each option (Esc/Ctrl+C keeps defaults).");
-  const cfg = state.engineConfig;
-  try {
-    cfg.harness = await promptSelect(
-      "Per-task harness",
-      [
-        { value: "opencode", label: "opencode", hint: "default" },
-        { value: "copilot", label: "copilot" },
-        { value: "openai", label: "openai" },
-        { value: "stub", label: "stub (offline testing)" },
-        { value: "flowforge-kernel", label: "flowforge-kernel" },
-      ],
-      { initial: cfg.harness || "opencode" },
-    );
-
-    cfg.granularity = await promptSelect(
-      "Task granularity",
-      [
-        { value: "fine", label: "fine", hint: "default: sub-bullets + oversized-bullet splits" },
-        { value: "coarse", label: "coarse: one task per PRD bullet" },
-      ],
-      { initial: cfg.granularity || "fine" },
-    );
-
-    cfg.concurrency = cleanPositiveInt(
-      await prompt("Max agents to run in parallel (1 = sequential)", cfg.concurrency || "1"),
-      cfg.concurrency || "1",
-    );
-    cfg.taskTimeoutMs = cleanPositiveInt(
-      await prompt("Per-task timeout (ms)", cfg.taskTimeoutMs || "600000"),
-      cfg.taskTimeoutMs || "600000",
-    );
-    cfg.maxRetries = cleanPositiveInt(
-      await prompt("Max retries per task", cfg.maxRetries || "2"),
-      cfg.maxRetries || "2",
-    );
-
-    const vizAnswer = await promptYesNo(
-      "Launch the live Forge Board dashboard during the run?",
-      cfg.viz ? "y" : "y",
-    );
-    cfg.viz = vizAnswer === "y";
-    if (cfg.viz) {
-      cfg.vizPort = cleanPositiveInt(
-        await prompt("Dashboard port (blank = 4299)", cfg.vizPort || "4299"),
-        cfg.vizPort || "",
-      );
-    }
-
-    const autoCommitAnswer = await promptYesNo(
-      "Auto-commit after each completed task?",
-      cfg.autoCommit ? "y" : "y",
-    );
-    cfg.autoCommit = autoCommitAnswer === "y";
-  } catch {
-    info("Engine options cancelled; using the current defaults.");
-  }
-  // Persist the chosen options so `forge-launcher resume` (and future runs) can
-  // rebuild the engine command with the same settings instead of the minimal
-  // `--harness`-only invocation.
-  saveEngineConfig(state.repoDir, state.engineConfig);
-}
-
-async function stopEngine(_opts: LauncherOptions): Promise<void> {
-  const engineDir = findEngineDir(state.repoDir);
-  if (!engineDir) {
-    warn("forge-workflow-engine not found under the repo; cannot stop the engine from here.");
-    warn(`Stop it manually: write {"request":"stop"} to ${path.join(state.repoDir, "docs", "engine-control.json")} and SIGTERM the engine process.`);
-    return;
-  }
-  info("Requesting a graceful stop after the current task …");
-  const result = await runCommand("npm", ["run", "workflow-engine", "--", "stop", "--repo", state.repoDir], { cwd: engineDir });
-  if (result.code !== 0) {
-    warn("The engine stop command did not exit cleanly; the control file may still be honored on its next wave.");
-  } else {
-    info("Stop requested. The engine saves state as paused after the current task; resume with the command below.");
-    command(`npx forge-launcher ${engineRunArgs().join(" ")}`);
-  }
-}
-
-async function runEngineDetached(opts: LauncherOptions): Promise<void> {
-  if (opts.dryRun) {
-    warn("Dry-run: would start the engine detached:");
-    printEngineCommand();
-    return;
-  }
-  if (!hasPrd()) {
-    warn("No PRD found yet (docs/PRD.md or docs/product-vision.md).");
-    warn("The engine compiles the manifest from the PRD, so the detached run will");
-    warn("fail at the compile step until a PRD exists. Generate one with forge-auto-build-prd first.");
-    out("");
-  }
-  const logDir = path.join(state.repoDir, "docs");
-  fs.mkdirSync(logDir, { recursive: true });
-  const logFile = path.join(logDir, "engine-run.log");
-  const { cmd, args } = engineDetachedCommand(engineRunArgs());
-  spawnDetached(cmd, args, {
-    cwd: state.repoDir,
-    logFile,
-    outFile: logFile,
-  });
-  state.engineStarted = true;
-  ok(`Engine started detached. Log: ${logFile}`);
-  out("");
-  info("The engine runs in the background, even after this launcher exits.");
-  info("Monitor progress from another terminal with:");
-  command(`tail -f ${logFile}`);
-  command(`tail -f ${path.join(state.repoDir, "docs", "PROGRESS.md")}`);
-  if (state.engineConfig.viz) {
-    out("");
-    info("The Forge Board dashboard starts when the engine starts");
-    info("(after the manifest is prepared). The URL is printed to the log above.");
-  }
-}
-
-async function engineDecision(opts: LauncherOptions): Promise<void> {
-  out("");
-  out("  The agent team is ready. You can run the build now through the");
-  out("  workflow engine, run it later, or build manually.");
-  out("");
-  if (opts.nonInteractive) {
-    if (!envFlag("FORGE_AUTO_DRAFT")) return;
-    printEngineCommand();
-    return;
-  }
-  out("");
-  const choice = await promptSelect(
-    "How do you want to run the build?",
-    [
-      { value: "1", label: "Run the workflow-engine build now (detached)" },
-      { value: "2", label: "Print the engine command to run later", hint: "default" },
-      { value: "3", label: "Skip - I will launch the CLI / build manually" },
-    ],
-    { initial: "2", nonInteractiveValue: "2" },
-  );
-  switch (choice) {
-    case "1": await configureEngineOptions(opts); await runEngineDetached(opts); break;
-    case "2": await configureEngineOptions(opts); printEngineCommand(); await pauseForResume(opts, "build configured"); break;
-    default:
-      info("Skipping the engine for now. Run the build manually or use the printed command later.");
-      await pauseForResume(opts, "build configured");
-  }
-}
-
-async function autoDraftTeam(opts: LauncherOptions): Promise<void> {
-  if (!hasPrd()) return;
-  if (opts.nonInteractive) {
-    if (!envFlag("FORGE_AUTO_DRAFT")) return;
-  } else {
-    const def = opts.draft ? "y" : "n";
-    const answer = await promptYesNo(
-      "Generate the agent team from the PRD automatically now (headless)?",
-      def,
-    );
-    if (answer === "n") return;
-  }
-
-  out("");
-  info("Auto-drafting the agent team from the PRD (headless) …");
-  const prdSource = prdSourceForTeam();
-  const skill = "forge-build-agent-team";
-  const ran = await runSkillHeadless(
-    `${buildTeamPrompt(prdSource, state.harness)} Auto-proceed with default assumptions and no questions.`,
-    opts,
-  );
-  if (!ran) return;
-  await draftCommit("feat: generate auto-drafted agent team");
-
-  if (hasGeneratedTeam()) {
-    ok("Agent team generated.");
-    out("");
-    out("  Review the generated team before building:");
-    out(`    - Agents : ${link(harnessAgentsDir() + "/")}`);
-    out(`    - Skills : ${link(harnessSkillsDir() + "/")}`);
-    await pauseForResume(opts, "team generated");
-    if (stopped) return;
-    await planAndValidateStep(opts);
-    if (stopped) return;
-  } else {
-    await diagnoseAutoDraftFail(skill);
-  }
-  await engineDecision(opts);
-}
-
-async function autoDraftMenu(opts: LauncherOptions): Promise<void> {
-  if (!fs.existsSync(path.join(state.repoDir, "docs", "IDEA.md"))) return;
-  await autoDraftPrd(opts);
-  if (stopped) return;
-  await autoDraftTeam(opts);
-}
+import { autoDraftMenu, engineDecision, engineRunArgs, openCliFor, runEngineDetached, stopEngine } from "./launcher/engine.ts";
 
 // --- Step 1: Pre-flight ----------------------------------------------------
 
@@ -894,7 +456,7 @@ async function launchAutobuild(opts: LauncherOptions): Promise<void> {
   }
 
   await autoDraftMenu(opts);
-  if (stopped) return;
+  if (state.stopped) return;
 
   if (state.engineStarted) {
     out("");
@@ -1458,17 +1020,6 @@ function printMonitorCommands(): void {
   out("");
 }
 
-async function openCliFor(cmd: string): Promise<void> {
-  const cli = state.harness === "github" ? "copilot" : state.harness === "claude" ? "claude" : "opencode";
-  const launched = await launchCliInTerminal(cli, state.repoDir, state.harness === "github" ? [] : ["."]);
-  if (launched) ok(`${cli} launched in a separate terminal.`);
-  else {
-    warn(`${cli} did not open automatically. Run:`);
-    out(`    cd "${state.repoDir}" && ${cli} .`);
-  }
-  out(`    Then run: ${cmd}`);
-  out("");
-}
 
 /** Stage: start/resume the build via the engine or hand off to the harness. */
 async function resumeEngineStep(opts: ResumeOptions): Promise<void> {
@@ -1658,7 +1209,7 @@ function completionSummary(): void {
 
 export async function runLauncher(opts: LauncherOptions = {}): Promise<number> {
   prompts.nonInteractive = Boolean(opts.nonInteractive);
-  stopped = false;
+  state.stopped = false;
 
   header();
   try {
@@ -1668,13 +1219,13 @@ export async function runLauncher(opts: LauncherOptions = {}): Promise<number> {
     await bootstrapForge(opts);
     await captureIdea(opts);
     await pauseForResume(opts, "idea captured");
-    if (stopped) { resumeSummary(); return 0; }
+    if (state.stopped) { resumeSummary(); return 0; }
     await addPrdAndResearch(opts);
     await pauseForResume(opts, "PRD added or skipped");
-    if (stopped) { resumeSummary(); return 0; }
+    if (state.stopped) { resumeSummary(); return 0; }
     await commitBootstrap();
     await launchAutobuild(opts);
-    if (stopped) { resumeSummary(); return 0; }
+    if (state.stopped) { resumeSummary(); return 0; }
     completionSummary();
     return 0;
   } catch (err) {
