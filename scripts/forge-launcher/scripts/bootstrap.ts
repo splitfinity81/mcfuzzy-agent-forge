@@ -19,7 +19,12 @@ export interface BootstrapOptions {
   force?: boolean;
   initGit?: boolean;
   nonInteractive?: boolean;
-  /** Skips installing dependencies for copied skills; they are listed instead. */
+  /**
+   * Skips installing dependencies for copied skills; they are listed instead.
+   * Setting FORGE_SKIP_INSTALL=1 has the same effect, which lets callers that
+   * reach bootstrap indirectly (the interactive launcher, test harnesses,
+   * air-gapped environments) opt out without threading the flag through.
+   */
   skipInstall?: boolean;
   /** When set, all progress output is appended here instead of stdout. */
   logFile?: string;
@@ -228,8 +233,10 @@ export async function bootstrap(opts: BootstrapOptions): Promise<number> {
     if (needsInstall.length > 0) {
       log.out("");
       log.out("Dependencies:");
-      if (opts.skipInstall) {
-        log.out(`  Skipped (--no-install): ${needsInstall.join(", ")}`);
+      const envSkip = process.env.FORGE_SKIP_INSTALL === "1";
+      if (opts.skipInstall || envSkip) {
+        const reason = opts.skipInstall ? "--no-install" : "FORGE_SKIP_INSTALL";
+        log.out(`  Skipped (${reason}): ${needsInstall.join(", ")}`);
       } else {
         pendingInstall = await installSkillDeps(skillsDir, needsInstall, log);
       }

@@ -76,6 +76,65 @@ test("bootstrap lists skills needing a manual install when --no-install is used"
   assert.match(log, /forge-workflow-engine/);
 });
 
+test("FORGE_SKIP_INSTALL=1 skips dependency installation without the CLI flag", async () => {
+  const target = tmpDir();
+  fs.mkdirSync(path.join(target, ".git"));
+  const previous = process.env.FORGE_SKIP_INSTALL;
+  process.env.FORGE_SKIP_INSTALL = "1";
+  try {
+    await bootstrap({ targetDir: target, harness: "agents", force: true, nonInteractive: true });
+  } finally {
+    if (previous === undefined) delete process.env.FORGE_SKIP_INSTALL;
+    else process.env.FORGE_SKIP_INSTALL = previous;
+  }
+
+  const log = fs.readFileSync(path.join(target, "docs", "engine-run.log"), "utf8");
+  // The reason names the env var rather than --no-install, so the log explains
+  // which of the two opt-outs actually applied.
+  assert.match(log, /Skipped \(FORGE_SKIP_INSTALL\):/);
+  assert.match(log, /Install these skill dependencies/);
+  assert.ok(
+    !fs.existsSync(path.join(target, ".agents", "skills", "forge-execution-adapter", "node_modules")),
+    "no dependencies should be installed when the env var is set",
+  );
+});
+
+test("bootstrap installs dependencies for skills that declare them", { timeout: 300_000 }, async () => {
+  const target = tmpDir();
+  fs.mkdirSync(path.join(target, ".git"));
+  const previous = process.env.FORGE_SKIP_INSTALL;
+  // runCli defaults this on for the launcher suite; clear it so the real
+  // install path is exercised here, which is the only place that covers it.
+  delete process.env.FORGE_SKIP_INSTALL;
+  try {
+    await bootstrap({ targetDir: target, harness: "agents", force: true, nonInteractive: true });
+  } finally {
+    if (previous !== undefined) process.env.FORGE_SKIP_INSTALL = previous;
+  }
+
+  const log = fs.readFileSync(path.join(target, "docs", "engine-run.log"), "utf8");
+  assert.doesNotMatch(log, /Skipped \(/, "the install branch should have run");
+
+  const skillsDir = path.join(target, ".agents", "skills");
+  const declared = skillsWithDependencies(skillsDir, fs.readdirSync(skillsDir));
+  assert.ok(declared.length > 0, "the templates should ship at least one skill with dependencies");
+
+  // Installs are deliberately non-fatal, so a skill may legitimately fail (no
+  // network, registry outage). Assert the outcome each skill actually reported
+  // rather than assuming success, which would make this test network-flaky.
+  for (const name of declared) {
+    const installed = new RegExp(`Installed: ${name}/`).test(log);
+    const failed = new RegExp(`Install failed: ${name}/`).test(log);
+    assert.ok(installed || failed, `${name} should report an install outcome:\n${log}`);
+    if (installed) {
+      assert.ok(
+        fs.existsSync(path.join(skillsDir, name, "node_modules")),
+        `${name} reported a successful install, so node_modules must exist`,
+      );
+    }
+  }
+});
+
 test("skillsWithDependencies selects only skills that declare dependencies", () => {
   const dir = tmpDir();
   const write = (name: string, pkg: string | null) => {

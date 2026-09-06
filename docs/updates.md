@@ -4,6 +4,24 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## September 2026 - v3.51
+
+### The launcher test suite stopped installing the world
+
+- The `scripts/forge-launcher` CI job took **7.9 minutes on Windows** against 0.8 minutes on Linux, and the full suite took **435.7 seconds** locally. The cause was `npm install` running against the live registry roughly 60 times per run: 12 tests drive the full non-interactive launcher, each one bootstraps a repo, and bootstrap installs the dependencies of all four skills that declare them (ADR-039). Measured directly, bootstrap costs 0.5 s with installation skipped and 20.3 s without.
+- `bootstrap` now honours `FORGE_SKIP_INSTALL=1` in addition to the existing `--no-install` flag, and the launcher suite sets it. An environment variable rather than a flag because the interactive launcher reaches bootstrap indirectly and takes no such flag; `FORGE_SKIP_INSTALL` joins the 27 `FORGE_*` variables the launcher already reads. The log records which opt-out applied, so `Skipped (FORGE_SKIP_INSTALL)` and `Skipped (--no-install)` are distinguishable after the fact.
+- Result: `launcher.test.ts` went from **316.4 s to 52.8 s**, and the full suite from **435.7 s to 78.3 s**, with 109 tests passing instead of 107. The suite also no longer needs network access to pass, which removes a whole class of flakiness that had nothing to do with what the tests assert.
+- Coverage went up, not down. The install path was previously executed 12 times and asserted **zero** times. It is now covered by a dedicated test in `bootstrap.test.ts` that asserts the outcome each skill actually reported, tolerating the non-fatal failure that ADR-039 specifies rather than assuming success.
+
+### Two findings worth recording
+
+- Three plausible explanations were measured and rejected before the real cause was found: the bootstrap tests already skipped installation, `npm audit`/funding round-trips were worth only 0.6 s, and test-file contention was worth ~25% rather than the bulk. Timing each test file in isolation was what localised it - `launcher.test.ts` was 316 s of a 351 s total, and every other file combined was 34 s.
+- Test-file concurrency was left at the default. Capping it at 2 measured 327 s against 436 s, but that contention was created by the installs; with them gone, pinning a value that depends on the runner's core count is not worth it.
+
+See [ADR-043](adr/043-launcher-tests-skip-dependency-installation.md).
+
+---
+
 ## September 2026 - v3.50
 
 ### Linting, with the noise turned off rather than tolerated

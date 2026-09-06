@@ -23,7 +23,7 @@ Guidance for AI coding agents working in this repository (MyForge).
 - **Changelog:** every user-visible change adds a new
   `## <Month> <Year> - v<ver>` section at the top of `docs/updates.md` and bumps
   the README's `**Latest:**` line. Notable features also get an ADR under
-  `docs/adr/NNN-*.md` (increment the number; ADR-042 is the latest).
+  `docs/adr/NNN-*.md` (increment the number; ADR-043 is the latest).
 - **Doc-as-you-build:** `SKILL.md`, deep-dives, and the README are updated in the
   same change as the code they describe — docs and changelog are part of the
   feature, not a follow-up.
@@ -32,8 +32,10 @@ Guidance for AI coding agents working in this repository (MyForge).
 - **Never commit `node_modules/` or `dist/`** — they are gitignored in every
   package and excluded from bootstrap copies. In target repos, `forge-launcher
   bootstrap` installs the deps of each copied skill that declares them (pass
-  `--no-install` to skip). Install failures are warnings, not errors: bootstrap
-  prints the per-skill `npm install` commands to run by hand.
+  `--no-install`, or `FORGE_SKIP_INSTALL=1`, to skip). Install failures are
+  warnings, not errors: bootstrap prints the per-skill `npm install` commands to
+  run by hand. The launcher test suite sets `FORGE_SKIP_INSTALL=1` so it does not
+  shell out to the registry; `bootstrap.test.ts` covers the real install path.
 
 ## Build & verify
 

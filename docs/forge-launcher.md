@@ -750,6 +750,7 @@ reflect the running build (monitor + resume) rather than the manual
 | `FORGE_REPO_DESCRIPTION` | 3 | Short repository description (optional) |
 | `FORGE_REPO_VISIBILITY` | 3 | `public` or `private` (default: `private`) |
 | `FORGE_REPO_PARENT_DIR` | 3 | Parent directory in which the repo directory is created (default: current working directory). Accepts `~`/`~/...` and `$VAR` expansion |
+| `FORGE_SKIP_INSTALL` | 4 | `1` skips installing dependencies for the copied skills, exactly like `bootstrap --no-install`. Use it when bootstrap is reached indirectly (the interactive launcher takes no such flag), offline, or in test harnesses. The skipped skills are still listed with the `npm install` command to run by hand |
 | `FORGE_IDEA` | 5 | Project idea text written to `docs/IDEA.md` (and mirrored to `IDEA.md`) |
 | `FORGE_PRD_FILE` | 6 | Path to an existing PRD file to copy in as `docs/PRD.md`. Accepts relative, `~`/`~/...`, and `$VAR`/`${VAR}` paths (e.g. `~/docs/prd.md`) |
 | `FORGE_RESEARCH_FILES` | 6 | Comma-separated list of paths to research/seed documents copied to `docs/research/`. Each path accepts relative, `~`/`~/...`, and `$VAR`/`${VAR}` forms |
