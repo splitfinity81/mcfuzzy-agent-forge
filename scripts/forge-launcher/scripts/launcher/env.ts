@@ -1,3 +1,5 @@
+import fs from "node:fs";
+import path from "node:path";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 
@@ -35,4 +37,23 @@ export function envFlagOrUndefined(name: string): boolean | undefined {
 
 export function debugMode(): boolean {
   return process.env.FORGE_LAUNCHER_DEBUG === "1";
+}
+
+/** True when `cmd` is resolvable on PATH (checks Windows executable extensions). */
+export function commandExists(cmd: string): boolean {
+  const pathVar = process.env.PATH ?? "";
+  const isWin = process.platform === "win32";
+  const exts = isWin ? ["", ".exe", ".cmd", ".bat"] : [""];
+  for (const dir of pathVar.split(path.delimiter)) {
+    if (!dir) continue;
+    for (const ext of exts) {
+      try {
+        fs.accessSync(path.join(dir, cmd + ext));
+        return true;
+      } catch {
+        // continue
+      }
+    }
+  }
+  return false;
 }
