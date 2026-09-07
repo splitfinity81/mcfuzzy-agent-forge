@@ -14,7 +14,8 @@
   "type": "module",
   "scripts": {
     "lint": "biome lint .",
-    "lint:fix": "biome lint --write ."
+    "lint:fix": "biome lint --write .",
+    "check:lockfiles": "node scripts/check-lockfile-registries.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.11"

@@ -103,6 +103,11 @@ jobs:
         # one Linux leg is enough - there is no per-package or per-OS variation.
         run: npm run lint
 
+      - name: Check lockfiles pin the canonical registry
+        # A lockfile that hard-codes a mirror pins that host for every consumer.
+        # See ADR-046.
+        run: npm run check:lockfiles
+
   version-consistency:
     name: Version consistency
     runs-on: ubuntu-latest

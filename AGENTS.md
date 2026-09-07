@@ -23,7 +23,7 @@ Guidance for AI coding agents working in this repository (MyForge).
 - **Changelog:** every user-visible change adds a new
   `## <Month> <Year> - v<ver>` section at the top of `docs/updates.md` and bumps
   the README's `**Latest:**` line. Notable features also get an ADR under
-  `docs/adr/NNN-*.md` (increment the number; ADR-045 is the latest).
+  `docs/adr/NNN-*.md` (increment the number; ADR-046 is the latest).
 - **Doc-as-you-build:** `SKILL.md`, deep-dives, and the README are updated in the
   same change as the code they describe — docs and changelog are part of the
   feature, not a follow-up.
@@ -36,6 +36,14 @@ Guidance for AI coding agents working in this repository (MyForge).
   warnings, not errors: bootstrap prints the per-skill `npm install` commands to
   run by hand. The launcher test suite sets `FORGE_SKIP_INSTALL=1` so it does not
   shell out to the registry; `bootstrap.test.ts` covers the real install path.
+- **Lockfiles pin `registry.npmjs.org`, never a mirror.** npm substitutes the
+  configured registry for that canonical host, so an npmjs-pinned lockfile
+  installs both from the public internet and from behind a corporate proxy. If
+  you are on a network that reaches npm through a mirror (for example
+  `packagefeedproxy.microsoft.io`), keep it in your **user-level `~/.npmrc`** —
+  a committed `.npmrc` would force that host on everyone, including public CI.
+  Running `npm install` with a mirror configured silently rewrites every
+  `resolved` URL, so `npm run check:lockfiles` guards against it (see ADR-046).
 
 ## Build & verify
 
@@ -59,6 +67,7 @@ Linting is repo-wide rather than per-package, and runs from the repository root:
 npm install          # first time; installs Biome only
 npm run lint         # biome lint .
 npm run lint:fix     # safe autofixes only - never pass --unsafe (see ADR-042)
+npm run check:lockfiles   # every tracked lockfile pins registry.npmjs.org
 ```
 
 ## Tools

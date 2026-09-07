@@ -4,6 +4,18 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## September 2026 - v3.54
+
+### Lockfiles pin the canonical npm registry again
+
+- Two committed lockfiles resolved their packages from a Microsoft package mirror rather than from npm: the root `package-lock.json` (9 entries) and `templates/skills/skill-review/package-lock.json` (67), all on numbered `ms-feed-N.pkgs.visualstudio.com` hosts. The other four pinned `registry.npmjs.org`, so the repo was internally inconsistent. See [ADR-046](adr/046-lockfiles-pin-canonical-npm-registry.md).
+- The cause was environmental, not deliberate. On a Microsoft-managed network `registry.npmjs.org` is unreachable - the TLS handshake is terminated with `SEC_E_ILLEGAL_MESSAGE` - so npm is pointed at `packagefeedproxy.microsoft.io` in the developer's user-level `~/.npmrc`. That proxy redirects to a numbered mirror host and npm records the redirect target, so any `npm install` on such a machine silently rewrites every `resolved` URL.
+- Nothing was visibly broken, because the `1es-public` feed is anonymously readable and CI stayed green. The 76 entries were still wrong: they force one mirror host on every consumer, leak the generating machine's feed configuration into a public repo, and would fail obscurely if a numbered host were retired or restricted.
+- All 76 URLs now pin `registry.npmjs.org`. npm substitutes the configured registry for that canonical host at install time - verified directly, `npm ci` against an npmjs-pinned lockfile completes in 12 seconds on a machine where npmjs itself is TLS-blocked - so the canonical host is the only choice that works both publicly and behind a mirror. `integrity` hashes cover the tarball contents rather than the host, so they stayed valid and needed no regeneration.
+- `npm run check:lockfiles` guards against a recurrence and runs in CI alongside the lint job. A committed `.npmrc` pointing at the proxy was rejected: it would make every public CI run and every external contributor depend on a hostname they cannot reach.
+
+---
+
 ## September 2026 - v3.53
 
 ### The launcher monolith is decomposed
