@@ -108,6 +108,45 @@ jobs:
         # See ADR-046.
         run: npm run check:lockfiles
 
+  package:
+    # forge-launcher is the only package with a build, and nothing else exercises
+    # it: the matrix above runs typecheck and test only. Since `prepack` is
+    # `npm run build && node scripts/stage-resources.mjs`, a regression in
+    # tsconfig.client.json, copy-client-assets.mjs or stage-resources.mjs would
+    # otherwise surface for the first time at publish time. Both OSes, because
+    # these steps copy trees and resolve paths across the repo root.
+    name: Package (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    defaults:
+      run:
+        working-directory: scripts/forge-launcher
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Verify the built CLI runs
+        # `bin` points at dist/cli.js, so this is what a global install executes.
+        run: node dist/cli.js --help
+
+      - name: Pack
+        # Runs prepack, which stages templates/ and prompt-playbook.md into
+        # resources/ so the published package can bootstrap standalone.
+        run: npm pack --dry-run
+
   version-consistency:
     name: Version consistency
     runs-on: ubuntu-latest

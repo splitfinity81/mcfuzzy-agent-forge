@@ -7,3 +7,9 @@ scripts/forge-launcher/*.tgz
 scripts/forge-launcher/resources/templates/
 scripts/forge-launcher/resources/prompt-playbook.md
 scripts/forge-launcher/resources/console/
+
+# Local bootstrap targets. `forge-launcher bootstrap` writes a complete project
+# (agents, skills and their node_modules) and inits a git repo in it, so one
+# created inside this tree would be committed as an embedded repository. Bootstrap
+# outside this repo, or into scratch/ when it has to live alongside the source.
+scratch/
