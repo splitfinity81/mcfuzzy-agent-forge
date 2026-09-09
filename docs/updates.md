@@ -4,6 +4,16 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## September 2026 - v3.57
+
+### CI now exercises the publish path
+
+- `scripts/forge-launcher` is the only package with a `build` script, and nothing ran it: the CI matrix covered `typecheck` and `test` only. Because `prepack` is `npm run build && node scripts/stage-resources.mjs`, a regression in `tsconfig.client.json`, `copy-client-assets.mjs` or `stage-resources.mjs` would have surfaced for the first time at publish time - the worst moment to discover it, and a live risk after the launcher decomposition moved so much between modules.
+- A `Package` job now builds, runs the built `dist/cli.js` (what `bin` points at, so it is what a global install executes), and runs `npm pack --dry-run` to exercise `prepack`. It runs on Windows and Ubuntu, because these steps copy trees and resolve paths across the repo root, which is exactly where the two platforms differ.
+- The path was verified healthy before wiring it up rather than after: build exits 0, the built CLI prints usage, and packing produces 543.3 kB across 167 files. This locks in behaviour that already worked instead of fixing a break.
+
+---
+
 ## September 2026 - v3.56
 
 ### Bootstrap targets are kept out of the source tree
