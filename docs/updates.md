@@ -4,6 +4,18 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## September 2026 - v3.55
+
+### The legacy shell wrappers are retired
+
+- ADR-023 moved the CLI into the Node package at `scripts/forge-launcher` and left six delegating wrappers behind (`bootstrap`, `forge-engine-run`, `forge-launcher`, each in `.sh` and `.ps1`), all self-declared legacy and "scheduled for removal". They are now deleted, along with the two delegating test runners. `scripts/evaluate-ollama-models.sh` stays - it is a genuine standalone research tool, not a CLI shim. See [ADR-047](adr/047-retire-the-legacy-shell-wrappers.md).
+- **The PowerShell wrappers were already broken.** All three tested `node_modules/.bin/tsx` with `Test-Path`, which also matches the extensionless *bash* shim npm creates there, then executed it - exit 0, no output. Verified directly: `.\scripts\forge-launcher.ps1 --help` printed nothing while `npx tsx scripts/cli.ts --help` printed usage. `forge-launcher.ps1` additionally dropped every argument, expanding `@Args` inside a function where `$Args` is that function's own empty array.
+- **The terminal smoke test had been red since [ADR-045](adr/045-decompose-the-launcher-monolith.md).** It asserted wiring by grepping `launcher.ts` for identifiers; the decomposition moved `launchCliInTerminal` into `launcher/bootstrap-flow.ts`, so it exited 1. Nothing noticed, because no CI job ran it.
+- It was **replaced rather than removed**, because it was the only coverage of terminal launching - there was no `terminal.test.ts` and `launchCliInTerminal` appeared nowhere in the suite. `terminal.ts` now exports its pure command builders and `terminal.test.ts` covers them with 16 assertions, including the shell quoting the greps never checked: POSIX escapes a quote as `'\''` while PowerShell doubles it, and either one wrong lets a quote in a path terminate the string and run as a command. Runtime behaviour is unchanged, and the tests were mutation-checked. The suite goes from 109 to 125 tests, now covering terminal launching in CI on both Windows and Ubuntu.
+- Running from a clone no longer needs a wrapper or a build step: `cd scripts/forge-launcher && npm install && npm start`, with arguments after `--`. Nine docs were updated; ADRs, `docs/research/` and `plan.md`'s problem statement keep their references as historical record.
+
+---
+
 ## September 2026 - v3.54
 
 ### Lockfiles pin the canonical npm registry again

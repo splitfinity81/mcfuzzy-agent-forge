@@ -12,6 +12,7 @@
   ],
   "scripts": {
     "build": "tsc && tsc -p tsconfig.client.json && node scripts/copy-client-assets.mjs",
+    "start": "tsx scripts/cli.ts",
     "pretest": "node scripts/assert-tests-discovered.mjs",
     "test": "node --import tsx --test scripts/*.test.ts",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.client.json --noEmit",

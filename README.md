@@ -7,7 +7,7 @@
 
 > MyForge turns an idea into a reviewed PRD, a specialist agent team, and an autonomous build.
 
-**Latest: v3.54** — see [docs/updates.md](docs/updates.md) for release notes.
+**Latest: v3.55** — see [docs/updates.md](docs/updates.md) for release notes.
 
 MyForge is a PRD-first workflow for turning product requirements into working software. It combines structured planning, agent-based implementation, and execution orchestration in one path so a project can move from concept to build without losing the review checkpoints that matter.
 
@@ -37,8 +37,9 @@ https://github.com/user-attachments/assets/f03d855f-4f97-4544-95f2-f14625f42e94
 
 ```bash
 git clone https://github.com/McFuzzySquirrel/mcfuzzy-agent-forge.git
-cd mcfuzzy-agent-forge
-./scripts/forge-launcher.sh
+cd mcfuzzy-agent-forge/scripts/forge-launcher
+npm install
+npm start
 ```
 
 This is the simplest manual path if you want to use the repository directly.
@@ -66,7 +67,7 @@ The launcher walks you through repo bootstrap, idea capture, PRD drafting, team 
 For the manual prompting flow and the CLI’s expected prompts, see [docs/prompt-playbook.md](docs/prompt-playbook.md). For the latest changes and release notes, see [docs/updates.md](docs/updates.md).
 
 > [!NOTE]
-> The canonical launcher runtime lives in [scripts/forge-launcher](scripts/forge-launcher). The shell wrappers are compatibility shims for existing workflows.
+> The launcher runtime lives in [scripts/forge-launcher](scripts/forge-launcher). Pass arguments through `npm start` with `--`, for example `npm start -- --dry-run`.
 
 ## How it works
 

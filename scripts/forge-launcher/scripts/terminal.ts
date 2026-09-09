@@ -5,6 +5,55 @@ import path from "node:path";
 import { command, warn } from "./format.ts";
 
 /**
+ * Builds the shell command run inside a POSIX terminal emulator.
+ *
+ * Exported so the quoting can be tested directly: every value is wrapped in
+ * single quotes and any embedded quote is closed, escaped and reopened
+ * (`'\''`), which is what keeps a directory or argument containing a quote from
+ * terminating the string and running as a command.
+ */
+export function posixLaunchScript(cliName: string, repoDir: string, args: string[] = []): string {
+  const argStr = args.map((a) => `'${a.replace(/'/g, "'\\''")}'`).join(" ");
+  return `cd '${repoDir.replace(/'/g, "'\\''")}' && '${cliName}' ${argStr}; exec bash`;
+}
+
+/**
+ * Builds the PowerShell command run inside a Windows terminal.
+ *
+ * PowerShell escapes a single quote by doubling it rather than with a
+ * backslash, so this deliberately differs from the POSIX form above.
+ */
+export function windowsLaunchScript(cliName: string, repoDir: string, args: string[] = []): string {
+  const escapedDir = repoDir.replace(/'/g, "''");
+  const escapedExe = cliName.replace(/'/g, "''");
+  const argStr = args.map((a) => `'${a.replace(/'/g, "''")}'`).join(" ");
+  return `Set-Location '${escapedDir}'; & '${escapedExe}' ${argStr}`;
+}
+
+/** Terminal emulators tried, in order, on POSIX. */
+export const POSIX_TERMINALS: Array<{
+  cmd: string;
+  args: (dir: string, script: string) => string[];
+}> = [
+  {
+    cmd: "gnome-terminal",
+    args: (dir, script) => [`--working-directory=${dir}`, "--", "bash", "-lc", script],
+  },
+  {
+    cmd: "x-terminal-emulator",
+    args: (_dir, script) => ["-e", "bash", "-lc", script],
+  },
+  {
+    cmd: "konsole",
+    args: (dir, script) => ["--workdir", dir, "-e", "bash", "-lc", script],
+  },
+  {
+    cmd: "mate-terminal",
+    args: (dir, script) => [`--working-directory=${dir}`, "--", "bash", "-lc", script],
+  },
+];
+
+/**
  * Launches a CLI (copilot/opencode/claude) inside a new terminal window in the
  * given directory. Returns true on success, false when no supported terminal
  * emulator is found (caller prints fallback instructions).
@@ -21,30 +70,10 @@ export function launchCliInTerminal(
 }
 
 function launchPosix(cliName: string, repoDir: string, args: string[]): Promise<boolean> {
-  const argStr = args.map((a) => `'${a.replace(/'/g, "'\\''")}'`).join(" ");
-  const launchScript = `cd '${repoDir.replace(/'/g, "'\\''")}' && '${cliName}' ${argStr}; exec bash`;
-
-  const candidates: Array<{ cmd: string; args: (dir: string, script: string) => string[] }> = [
-    {
-      cmd: "gnome-terminal",
-      args: (dir, script) => ["--working-directory=" + dir, "--", "bash", "-lc", script],
-    },
-    {
-      cmd: "x-terminal-emulator",
-      args: (_dir, script) => ["-e", "bash", "-lc", script],
-    },
-    {
-      cmd: "konsole",
-      args: (dir, script) => ["--workdir", dir, "-e", "bash", "-lc", script],
-    },
-    {
-      cmd: "mate-terminal",
-      args: (dir, script) => ["--working-directory=" + dir, "--", "bash", "-lc", script],
-    },
-  ];
+  const launchScript = posixLaunchScript(cliName, repoDir, args);
 
   return new Promise((resolve) => {
-    const tryNext = (cands: typeof candidates) => {
+    const tryNext = (cands: typeof POSIX_TERMINALS) => {
       if (cands.length === 0) {
         warn("No supported desktop terminal emulator found. Open a terminal manually and run:");
         command(`cd "${repoDir}" && ${cliName} ${args.join(" ")}`);
@@ -62,15 +91,12 @@ function launchPosix(cliName: string, repoDir: string, args: string[]): Promise<
         resolve(true);
       });
     };
-    tryNext(candidates);
+    tryNext(POSIX_TERMINALS);
   });
 }
 
 function launchWindows(cliName: string, repoDir: string, args: string[]): Promise<boolean> {
-  const escapedDir = repoDir.replace(/'/g, "''");
-  const escapedExe = cliName.replace(/'/g, "''");
-  const argStr = args.map((a) => `'${a.replace(/'/g, "''")}'`).join(" ");
-  const launchScript = `Set-Location '${escapedDir}'; & '${escapedExe}' ${argStr}`;
+  const launchScript = windowsLaunchScript(cliName, repoDir, args);
 
   const wt = process.env.WT_SESSION ? "wt" : undefined; // Windows Terminal (Win11+) sessions set WT_SESSION
   const pwsh = commandExists("pwsh");

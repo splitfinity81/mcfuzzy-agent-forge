@@ -63,7 +63,6 @@ npm run workflow-engine -- run --harness opencode --yes
 
 ```bash
 forge-launcher engine-run --repo <repo-dir> --harness opencode --yes
-# or the legacy wrapper: ./scripts/forge-engine-run.sh --repo <repo-dir> --harness opencode --yes
 ```
 
 This installs the adapter and engine dependencies, compiles the manifest if missing, then runs the engine in the foreground. Add `--dry-run` to print the command sequence without executing it.
@@ -374,9 +373,8 @@ the manifest dependency graph plus the same-owner guard for file isolation - so
 declare dependencies correctly before raising `n`, and be aware that cross-owner
 tasks on shared paths (e.g. one task scaffolding a directory while another
 builds inside it) are still the operator's responsibility. `FORGE_ENGINE_CONCURRENCY`
-sets the default, and `forge-launcher engine-run` (or the legacy
-`scripts/forge-engine-run.sh` / `.ps1`) accepts `--concurrency <n>` /
-`-Concurrency <n>` to pass it through. See [ADR-021](adr/021-parallel-task-dispatch.md).
+sets the default, and `forge-launcher engine-run` accepts `--concurrency <n>` to
+pass it through. See [ADR-021](adr/021-parallel-task-dispatch.md).
 
 ---
 

@@ -227,20 +227,20 @@ Open items deliberately not done in this plan - candidates for a follow-up.
 - Decide whether a repo-side `scripts/` entry point is still needed once
   published, or if `npx forge-launcher` fully replaces it.
 
-### Delete the legacy shell wrappers (next release)
+### Delete the legacy shell wrappers (done)
 
-- `scripts/forge-launcher.sh|.ps1`, `bootstrap.sh|.ps1`,
-  `forge-engine-run.sh|.ps1` are kept as thin delegating wrappers for one
-  release. Once docs + tests no longer reference them, delete them.
-- Retire `scripts/test-forge-launcher.sh` and
-  `scripts/smoke-test-launcher-terminal-support.sh` (currently delegating
-  runners) when the wrappers go.
+- Completed. `scripts/forge-launcher.sh|.ps1`, `bootstrap.sh|.ps1` and
+  `forge-engine-run.sh|.ps1` were kept as thin delegating wrappers for several
+  releases and are now deleted, along with the delegating runners
+  `scripts/test-forge-launcher.sh` and
+  `scripts/smoke-test-launcher-terminal-support.sh`. See
+  [ADR-047](docs/adr/047-retire-the-legacy-shell-wrappers.md).
 
-### Full-shell wrapper robustness
+### Full-shell wrapper robustness (obsolete)
 
-- The bash wrappers prefer `dist/cli.js` (built), then `tsx`. In a fresh clone
-  without `npm install` they print a build hint. Consider compiling on
-  install (postinstall) or committing `dist` so wrappers always work offline.
+- Moot now the wrappers are gone. Running from a clone no longer needs a build
+  step: `cd scripts/forge-launcher && npm install && npm start` executes the CLI
+  through `tsx`.
 
 ### Behavioural parity checks (minor)
 

@@ -38,8 +38,8 @@ npm run forge-execution-adapter -- compile
 > **Runtime requirement:** this skill is a Node package and requires `node >= 18`
 > and `npm` at *build time*. `forge-launcher bootstrap` installs the dependencies
 > of every copied skill that declares them, so in the normal case there is nothing
-> to do here. Nothing else installs them: neither `forge-launcher engine-run` nor
-> `scripts/forge-engine-run.sh`. The installed `node_modules/` is gitignored in
+> to do here. Nothing else installs them, including `forge-launcher engine-run`.
+> The installed `node_modules/` is gitignored in
 > target repos and must never be committed.
 
 If you bootstrapped with `--no-install`, or an install failed (bootstrap warns and

@@ -107,17 +107,16 @@ when a newer version is available - prereleases check the `beta` tag, releases
 check `latest`. Disable it with `--no-update-check` or
 `FORGE_SKIP_UPDATE_CHECK=1` (also skipped in CI).
 
-### Linux / macOS (legacy script)
+### Run from a clone (without installing)
 
 ```bash
-./scripts/forge-launcher.sh
+cd scripts/forge-launcher
+npm install
+npm start
 ```
 
-### Windows (PowerShell, legacy script)
-
-```powershell
-.\scripts\forge-launcher.ps1
-```
+`npm start` runs the CLI through `tsx`, so no build step is needed. Pass
+arguments after `--`, for example `npm start -- --dry-run`.
 
 ### Draft (auto-author) mode
 
@@ -159,7 +158,7 @@ $env:FORGE_IDEA = "A task management web app with a React frontend and a Node.js
 $env:FORGE_PRD_FILE = "C:\path\to\my-prd.md"                              # optional
 $env:FORGE_RESEARCH_FILES = "C:\path\to\research.md,C:\path\to\notes.md"  # optional
 $env:FORGE_YN_DEFAULT = "y"
-.\scripts\forge-launcher.ps1 -NonInteractive
+forge-launcher --non-interactive
 ```
 
 ### Headless mode (terminal-driven, no interactive CLI)
@@ -189,11 +188,9 @@ forge-launcher --headless
 
 # Print the exact command without running it (CI / testing)
 forge-launcher --headless --dry-run
-
-# PowerShell
-.\scripts\forge-launcher.ps1 -Headless
-.\scripts\forge-launcher.ps1 -Headless -DryRun
 ```
+
+The same flags apply on Windows; the CLI is cross-platform.
 
 What gets queued:
 
@@ -846,8 +843,7 @@ The repository directory was created before bootstrap ran. You can re-run bootst
 
 ```bash
 forge-launcher bootstrap /path/to/your/repo --harness <harness>
-# or the legacy wrapper:
-./scripts/bootstrap.sh /path/to/your/repo --harness <harness>
+# or, from a clone: cd scripts/forge-launcher && npm start -- bootstrap /path/to/your/repo --harness <harness>
 ```
 
 Then continue from Step 5 (create `docs/IDEA.md` manually and commit).
