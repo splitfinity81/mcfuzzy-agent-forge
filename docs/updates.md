@@ -4,6 +4,15 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## September 2026 - v3.56
+
+### Bootstrap targets are kept out of the source tree
+
+- A `forge-launcher bootstrap` target had been created inside the repository working tree. Bootstrap writes a whole project - agents, skills and their `node_modules` - and runs `git init` in it, so it sat there as a 151 MB embedded git repository: 1,843 dependency files, 115 generated copies of `templates/agents` and `templates/skills`, and no authored content of its own. Untracked but not ignored, it was one `git add -A` away from being committed.
+- `scratch/` is now gitignored as the place for a bootstrap target that has to live alongside the source, and `AGENTS.md` records that they otherwise belong outside the checkout entirely. Verified against a target with its own `.git` directory: it no longer appears in `git status`.
+
+---
+
 ## September 2026 - v3.55
 
 ### The legacy shell wrappers are retired

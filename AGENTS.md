@@ -36,6 +36,11 @@ Guidance for AI coding agents working in this repository (MyForge).
   warnings, not errors: bootstrap prints the per-skill `npm install` commands to
   run by hand. The launcher test suite sets `FORGE_SKIP_INSTALL=1` so it does not
   shell out to the registry; `bootstrap.test.ts` covers the real install path.
+- **Bootstrap targets live outside this repo.** `forge-launcher bootstrap` writes
+  a whole project — agents, skills, their `node_modules` — and runs `git init` in
+  it, so a target created inside this tree shows up as an embedded git repository
+  and is easy to commit by accident. Point it somewhere outside the checkout, or
+  at `scratch/` (gitignored) when it has to sit alongside the source.
 - **Lockfiles pin `registry.npmjs.org`, never a mirror.** npm substitutes the
   configured registry for that canonical host, so an npmjs-pinned lockfile
   installs both from the public internet and from behind a corporate proxy. If
