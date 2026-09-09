@@ -23,9 +23,9 @@ The current package-level test suite exercises the main launcher behaviors:
 - launcher flow generation and dry-run behavior,
 - engine-run argument handling and persistence,
 - resume flow behavior,
-- console entry-point behavior.
-
-The package also has a dedicated smoke-test script for terminal-launch support under [scripts/smoke-test-launcher-terminal-support.sh](../scripts/smoke-test-launcher-terminal-support.sh).
+- console entry-point behavior,
+- terminal-launch command construction, including the shell quoting used for
+  paths and arguments on POSIX and Windows.
 
 ## 3. Manual smoke test for a full local run
 
