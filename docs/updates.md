@@ -4,6 +4,18 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## September 2026 - v3.58
+
+### skill-review was blind to github repos, to Windows, and to its own tests
+
+- A reachability audit - walking the import graph from every `*.test.ts` rather than matching filenames - found 32 of 85 source modules unreachable from any test. The largest gap in a *shipped* package was `templates/skills/skill-review`, with one test file covering one of its eight modules. That skill is copied into every bootstrapped repository, so its bugs are present in every target repo. Three were found, each reproduced before being changed. See [ADR-048](adr/048-skill-review-detection-and-test-discovery.md).
+- **New test files were silently ignored.** The package's test script named a single file rather than globbing like every other package. A deliberately failing canary test proved it: `npm test` exited 0 without running it, while the correct glob exited 1. The `pretest` guard from ADR-039 could not catch this - it asserts that tests were discovered, and one was.
+- **`github`-harness repositories looked empty.** `.github/skills` was missing from the search list, and the directory walker skipped every dotted entry except `.agents`, `.opencode` and `.claude`, so it could not have been found anyway. Measured per harness, `.github` returned `null` and zero skill files while the other three worked. The walker's allowlist is now derived from the search list, so the two cannot drift apart again.
+- **Changed-file detection never worked on Windows.** The git lookup was one shell string using `2>/dev/null ||`, which `execSync` runs through `cmd.exe`, where that is not valid redirection. All three alternatives failed, the throw skipped the `HEAD~1` fallback, and the function reported no changed skills on every Windows repository - and on any repository without an `origin` remote. Git now runs as argv with per-candidate error handling, which also removes a ref interpolated into a command string.
+- The package goes from 2 tests to 32 and the repository from 261 to 291, all six packages green. The new tests were mutation-checked against both detection bugs. `rubric.ts` and the network provider modules remain untested; this covered the pure logic first.
+
+---
+
 ## September 2026 - v3.57
 
 ### CI now exercises the publish path
