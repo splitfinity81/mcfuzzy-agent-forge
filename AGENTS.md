@@ -23,7 +23,7 @@ Guidance for AI coding agents working in this repository (MyForge).
 - **Changelog:** every user-visible change adds a new
   `## <Month> <Year> - v<ver>` section at the top of `docs/updates.md` and bumps
   the README's `**Latest:**` line. Notable features also get an ADR under
-  `docs/adr/NNN-*.md` (increment the number; ADR-047 is the latest).
+  `docs/adr/NNN-*.md` (increment the number; ADR-048 is the latest).
 - **Doc-as-you-build:** `SKILL.md`, deep-dives, and the README are updated in the
   same change as the code they describe — docs and changelog are part of the
   feature, not a follow-up.
@@ -61,10 +61,13 @@ npm run typecheck    # tsc --noEmit
 npm test             # node --test suite
 ```
 
-Package test globs: the workflow engine runs
-`scripts/*.test.ts scripts/*/*.test.ts`; the execution adapter, workforce
-compiler, and launcher run `scripts/*.test.ts`. Each package also exposes its
-own entry script (e.g. `npm run workflow-engine -- run`).
+Package test globs: the workflow engine and skill-review run
+`scripts/*.test.ts scripts/*/*.test.ts` because both have nested test
+directories; the execution adapter, workforce compiler, and launcher run
+`scripts/*.test.ts`. A test script must glob rather than name files: one that
+names a single file silently skips every other suite, and the `pretest` guard
+cannot see it because a test *was* discovered (see ADR-048). Each package also
+exposes its own entry script (e.g. `npm run workflow-engine -- run`).
 
 Linting is repo-wide rather than per-package, and runs from the repository root:
 
