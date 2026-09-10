@@ -1,3 +1,4 @@
+import spawn from "cross-spawn";
 import fs from "node:fs";
 import { createRequire } from "node:module";
 import os from "node:os";
@@ -6,7 +7,6 @@ import semver from "semver";
 import { warn } from "./format.ts";
 
 const PKG_NAME = "forge-launcher";
-const DEFAULT_REGISTRY = "https://registry.npmjs.org";
 const CACHE_TTL_HOURS = Number(process.env.FORGE_UPDATE_CHECK_INTERVAL_HOURS) || 24;
 const CACHE_TTL_MS = CACHE_TTL_HOURS * 60 * 60 * 1000;
 
@@ -18,9 +18,10 @@ export interface UpdateInfo {
   tag: string;
 }
 
-interface UpdateCache {
+export interface UpdateCache {
   checkedAt: string;
   latest: string;
+  url?: string;
 }
 
 export interface CheckOptions {
@@ -28,6 +29,7 @@ export interface CheckOptions {
   timeoutMs?: number;
   fetcher?: typeof fetch;
   cacheFile?: string;
+  registryReader?: () => string | null;
 }
 
 /** The installed forge-launcher version (read from package.json at runtime). */
@@ -46,10 +48,39 @@ export function distTagFor(version: string): string {
   return semver.prerelease(version) ? "beta" : "latest";
 }
 
-/** npm registry endpoint for a package's dist-tag. */
-export function registryUrl(tag: string): string {
-  const base = (process.env.npm_config_registry || DEFAULT_REGISTRY).replace(/\/+$/, "");
-  return `${base}/${PKG_NAME}/${tag}`;
+/** Let npm resolve environment overrides, npmrc precedence and interpolation. */
+export function configuredRegistry(): string | null {
+  const result = spawn.sync("npm", ["config", "get", "registry", "--update-notifier=false"], {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "ignore"],
+    timeout: 5000,
+    maxBuffer: 64 * 1024,
+    windowsHide: true,
+  });
+  if (result.error || result.status !== 0) {
+    warn("Skipping update check: 'npm config get registry' failed or timed out.");
+    return null;
+  }
+  return result.stdout.trim();
+}
+
+/** npm registry endpoint for a package's dist-tag, without a fallback registry. */
+export function registryUrl(tag: string, registry: string): string | null {
+  try {
+    const url = new URL(registry);
+    if (
+      (url.protocol !== "https:" && url.protocol !== "http:") ||
+      url.username || url.password || url.search || url.hash
+    ) {
+      throw new TypeError("Unsupported npm registry URL");
+    }
+    url.pathname = `${url.pathname.replace(/\/+$/, "")}/${PKG_NAME}/${encodeURIComponent(tag)}`;
+    return url.href;
+  } catch (err) {
+    if (!(err instanceof TypeError)) throw err;
+    warn("Skipping update check: npm's registry must be an HTTP(S) URL without credentials, a query or a fragment.");
+    return null;
+  }
 }
 
 /** True when `latest` is a newer semver than `current` (unparseable → false). */
@@ -85,12 +116,12 @@ export function readCache(file = cachePath()): UpdateCache | null {
   }
 }
 
-export function writeCache(latest: string, file = cachePath()): void {
+export function writeCache(latest: string, url: string, file = cachePath()): void {
   try {
     fs.mkdirSync(path.dirname(file), { recursive: true });
     fs.writeFileSync(
       file,
-      JSON.stringify({ checkedAt: new Date().toISOString(), latest }, null, 2),
+      JSON.stringify({ checkedAt: new Date().toISOString(), latest, url }, null, 2),
       "utf8",
     );
   } catch {
@@ -106,10 +137,10 @@ export function cacheFresh(cache: UpdateCache | null, now = Date.now()): boolean
   return now - checked < CACHE_TTL_MS;
 }
 
-async function fetchLatest(tag: string, opts: CheckOptions): Promise<string | null> {
+async function fetchLatest(url: string, opts: CheckOptions): Promise<string | null> {
   const fetcher = opts.fetcher ?? fetch;
   try {
-    const res = await fetcher(registryUrl(tag), {
+    const res = await fetcher(url, {
       signal: AbortSignal.timeout(opts.timeoutMs ?? 2000),
       headers: { accept: "application/json" },
     });
@@ -124,24 +155,29 @@ async function fetchLatest(tag: string, opts: CheckOptions): Promise<string | nu
 /**
  * Checks the registry for a newer forge-launcher. Returns update info when one
  * exists, null otherwise (or when the check is disabled/offline). Honors a
- * daily cache so repeated invocations are instant and network-free.
+ * daily cache for the selected registry and tag so repeated invocations are
+ * network-free.
  */
 export async function checkForUpdate(opts: CheckOptions = {}): Promise<UpdateInfo | null> {
   if (opts.skip || !shouldCheck()) return null;
   const current = currentVersion();
   const tag = distTagFor(current);
   const file = opts.cacheFile ?? cachePath();
+  const registry = (opts.registryReader ?? configuredRegistry)();
+  if (registry === null) return null;
+  const url = registryUrl(tag, registry);
+  if (!url) return null;
 
   const cached = readCache(file);
-  if (cacheFresh(cached)) {
-    return cached && isNewer(current, cached.latest)
+  if (cached?.url === url && cacheFresh(cached)) {
+    return isNewer(current, cached.latest)
       ? { current, latest: cached.latest, tag }
       : null;
   }
 
-  const latest = await fetchLatest(tag, opts);
+  const latest = await fetchLatest(url, opts);
   if (!latest) return null;
-  writeCache(latest, file);
+  writeCache(latest, url, file);
   return isNewer(current, latest) ? { current, latest, tag } : null;
 }
 

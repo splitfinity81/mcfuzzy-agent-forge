@@ -4,6 +4,17 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## September 2026 - v3.59
+
+### Update notifications respect npm's configured registry
+
+- Direct launcher invocations previously checked the public registry unless `npm_config_registry` was present in the environment, ignoring feeds configured in `.npmrc`. The updater now asks npm to resolve the effective registry, including project, user and global configuration, environment overrides and variable interpolation.
+- Registry resolution uses the existing cross-platform process dependency, disables npm's own update notifier, and has a five-second limit. Failed configuration lookup or an unusable registry URL skips the optional notification with a warning; failed feed requests never trigger a retry through public npm. No corporate registry is hard-coded and no publishing configuration changes.
+- Daily cached results are tied to the selected registry endpoint and release tag. Results from a previous feed or tag, including legacy cache entries without a source endpoint, cannot supply an upgrade notification for the current feed.
+- `--no-update-check`, `FORGE_SKIP_UPDATE_CHECK` and CI continue to skip the updater, including its new local configuration lookup. See the [launcher guide](forge-launcher.md#npm-package-recommended-cross-platform) for authentication limitations and configuration details.
+
+---
+
 ## September 2026 - v3.58
 
 ### skill-review was blind to github repos, to Windows, and to its own tests

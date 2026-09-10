@@ -101,11 +101,28 @@ npm uninstall -g forge-launcher            # removes a tarball install (or link)
 cd scripts/forge-launcher && npm unlink    # drops the `npm link` symlink
 ```
 
-**Update check.** On startup, `forge-launcher` checks the npm registry (honoring
-your configured registry, e.g. a local Verdaccio) once a day and prints a notice
-when a newer version is available - prereleases check the `beta` tag, releases
-check `latest`. Disable it with `--no-update-check` or
-`FORGE_SKIP_UPDATE_CHECK=1` (also skipped in CI).
+**Update check.** On startup, `forge-launcher` asks npm for the effective registry
+with a local `npm config get registry --update-notifier=false` command. This honors
+environment overrides and project, user and global `.npmrc` configuration,
+including variable interpolation, even when launching the CLI directly rather
+than through `npm run`. Keep corporate feeds in your user-level configuration,
+not in this repository.
+
+It then looks for a newer version - prereleases check the `beta` tag, releases
+check `latest` - and caches the result for a day. Cache entries are tied to the
+registry endpoint and tag; entries from another feed or tag, and legacy entries
+without an endpoint, are not reused.
+
+If npm is unavailable, its configuration command fails or exceeds five seconds,
+or the registry URL is unusable, the updater prints a warning and skips the
+lookup. An unreachable feed or failed HTTP request also leaves the launcher
+usable. Neither path falls back to a different registry. Only the registry URL
+is read; authentication from `.npmrc` is not forwarded to the HTTP request.
+URLs with embedded credentials, query strings or fragments are not supported.
+
+Disable the updater with `--no-update-check` or `FORGE_SKIP_UPDATE_CHECK=1`
+(also skipped in CI). These options skip both the local npm command and the
+network request.
 
 ### Run from a clone (without installing)
 
